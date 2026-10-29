@@ -32,8 +32,7 @@ Note: in the first fresh-database pass the Phase 6a and 6b browser scripts each 
 ## Defects found and fixed during the phase
 1. The price form chose its default security when it first appeared, before any holding existed, so the first price was recorded for the wrong security (found by the browser run; the same class of bug as in 6b). Defaults now follow the data, with a unit test.
 2. The overview refused everyone who lacked the collateral right, including trade reviewers; each half now loads on its own.
-3. Dispatching or claiming rows under an append-only table needs no row locks: the earlier lesson applied, and the margin/trade code uses plain inserts and an advisory lock only where needed.
-4. A unit test expectation ignored that a concentration limit also caps a lone holding at its share of itself; the engine was right, the test was changed and the behaviour is recorded as A-057.
+3. A unit test expectation ignored that a concentration limit also caps a lone holding at its share of itself; the engine was right, the test was changed and the behaviour is recorded as A-057.
 
 ## Limits
 - All definitions are synthetic (A-050); there is no price feed, custody connector or trade-system adapter (A-051, A-054).
