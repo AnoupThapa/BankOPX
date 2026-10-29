@@ -35,6 +35,10 @@ export class Db implements OnModuleDestroy {
     return r.rows[0];
   }
 
+  async institutionIds(): Promise<string[]> {
+    return (await this.pool.query('SELECT id FROM institution ORDER BY created_at')).rows.map((r) => r.id as string);
+  }
+
   async onModuleDestroy(): Promise<void> {
     await this.pool.end();
   }

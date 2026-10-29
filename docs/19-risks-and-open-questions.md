@@ -82,6 +82,16 @@ Add questions as they arise (Q21+). Close a question by recording the decision, 
 | A-024 | 2026-10-29 | Authority limits, SLA durations and customer status labels in tests and the dev seed are synthetic | APR-03, STS-01 | Bank | Phase 5 | Bank decides |
 | A-025 | 2026-10-29 | Outbound delivery of notifications (SMS/email/push) is not connected; only in-app | NOT-01 | Engineering | Phase 5 | Open |
 | A-026 | 2026-10-29 | A-018 partially addressed: workflow can gate approval, but per-service mandatory-document gating needs bank configuration | DOC-13 | Product owner | Phase 5 | Open |
+| A-027 | 2026-10-29 | The pilot connector is a controlled hand-off: a person at the bank carries the request out and records the bank's reference. No bank API, vendor, file exchange or authorisation is assumed | INT-01, INT-07 | Bank integration owner | Pilot start | Bank decides |
+| A-028 | 2026-10-29 | Callback signing uses a per-connector shared secret read from the environment; storage, rotation and the sender's implementation are not decided | INT-03, SEC | Bank IT security | Pilot start | Bank decides |
+| A-029 | 2026-10-29 | Operators confirm alone (reference and note recorded); whether a second person must confirm is not decided | INT-01, APR | Bank operations | Pilot start | Bank decides |
+| A-030 | 2026-10-29 | Hand-offs of cases with no branch are visible to no operator; branch assignment is assumed for pilot cases | SEC-02 | Product owner | Phase 5 | Open |
+| A-031 | 2026-10-29 | Fulfilment is tracked separately from the case; the case stays "approved" and customers see completion in progress or completed. A failed hand-off does not reopen a decision | WFL-05, INT-01 | Product owner | Phase 5 | Open |
+| A-032 | 2026-10-29 | `nonMonetary` approval nodes treat the amount as 0, so any approver with the permission and branch may decide. Whether limited approvers should decide such requests is a bank policy | APR-03 | Bank credit/ops policy | Pilot start | Bank decides |
+| A-033 | 2026-10-29 | Nepali wording added in Phase 5 (completion messages, notification template) is a draft and needs bank-approved translation | NOT-03, I18N | Bank | Pilot start | Open |
+| A-034 | 2026-10-29 | Scheduler runs in-process when BBJP_SCHEDULER=1; there is no external job runner, no alert on stuck work, and no alerting wired to the health numbers. A-021 is partly addressed (the timer exists) | WFL-08, INT-04 | Engineering | Phase 9 | Open |
+| A-035 | 2026-10-29 | Reconciliation compares a list the operator posts; scheduled reconciliation, file exchange and break ownership/ageing are not built | INT-03, docs/09 §5 | Engineering / bank | Phase 9 | Open |
+| A-036 | 2026-10-29 | Pilot metrics cover cases, hand-offs and turnaround only; visits avoided, handling time and satisfaction need the bank's own measurement | docs/20 | Bank | Pilot start | Open |
 
 **Rule:** an assumption touching legal validity, KYC, AML, credit thresholds, approval limits, retention, residency, hosting or provider selection must be confirmed by the bank before production use.
 

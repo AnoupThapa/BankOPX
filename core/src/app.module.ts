@@ -13,9 +13,12 @@ import { TatSlaModule } from './tat-sla';
 import { WorkflowModule } from './workflow';
 import { DocumentEvidenceModule } from './document-evidence';
 import { FormsModule } from './forms';
+import { IntegrationModule } from './integration';
+import { PilotModule } from './pilot';
+import { SchedulerModule } from './scheduler';
 
 @Module({
-  imports: [PlatformModule, AuditModule, IdentityAccessModule, ConfigurationModule, CustomerProfileModule, ServiceCatalogueModule, FormsModule, DocumentEvidenceModule, CaseModule, TatSlaModule, NotificationModule, WorkflowModule],
+  imports: [PlatformModule, AuditModule, IdentityAccessModule, ConfigurationModule, CustomerProfileModule, ServiceCatalogueModule, FormsModule, DocumentEvidenceModule, CaseModule, TatSlaModule, NotificationModule, WorkflowModule, IntegrationModule, PilotModule, SchedulerModule],
   controllers: [HealthController, AuditController],
 })
 export class AppModule {}

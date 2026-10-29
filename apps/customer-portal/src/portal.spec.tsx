@@ -60,3 +60,35 @@ describe('case page (RET-02, RET-03)', () => {
     }
   });
 });
+
+describe('completion wording (INT-01)', () => {
+  const detail = { caseId: 'c1', trackingCode: 'BB-AAAAA-BBBBB', serviceKey: 'cert', customerStatus: 'decision_made', submittedAt: '2030-01-01T00:00:00Z', request: null, decision: { outcome: 'approved', message: { en: 'Approved.', ne: 'स्वीकृत।' } },
+    documents: [], versions: [{ version: 1, kind: 'submission', at: '2030-01-01T00:00:00Z' }], form: null, data: {} };
+  const serve = (fulfilment: string) => vi.stubGlobal('fetch', vi.fn(async (url: string) => new Response(JSON.stringify(String(url).endsWith('/timeline') ? { timeline: [] } : String(url).endsWith('/fulfilment') ? { fulfilment } : detail), { status: 200 })));
+
+  it('an approved request is not called completed until the bank has completed it, in both languages', async () => {
+    const { CaseView } = await import('./applications');
+    const { LocaleProvider } = await import('@bbjp/ui');
+    for (const locale of ['en', 'ne'] as const) {
+      serve('in_progress');
+      const a = render(<LocaleProvider locale={locale} extra={EXTRA}><CaseView caseId="c1" back={() => undefined} /></LocaleProvider>);
+      await screen.findByText(EXTRA[locale]['fulfil.in_progress']!);
+      expect(screen.queryByText(EXTRA[locale]['fulfil.completed']!)).not.toBeInTheDocument();
+      a.unmount();
+      serve('completed');
+      const b = render(<LocaleProvider locale={locale} extra={EXTRA}><CaseView caseId="c1" back={() => undefined} /></LocaleProvider>);
+      await screen.findByText(EXTRA[locale]['fulfil.completed']!);
+      b.unmount();
+    }
+  });
+
+  it('a case with no bank hand-off shows no completion card', async () => {
+    const { CaseView } = await import('./applications');
+    const { LocaleProvider } = await import('@bbjp/ui');
+    serve('not_applicable');
+    render(<LocaleProvider locale="en" extra={EXTRA}><CaseView caseId="c1" back={() => undefined} /></LocaleProvider>);
+    await screen.findByRole('heading', { name: 'BB-AAAAA-BBBBB' });
+    expect(screen.queryByRole('region', { name: 'Completion' })).not.toBeInTheDocument();
+  });
+});
+

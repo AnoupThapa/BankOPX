@@ -127,9 +127,10 @@ export function CaseView({ caseId, back }: { caseId: string; back: () => void })
   const [errors, setErrors] = useState<Record<string, string[]>>({}); const [missing, setMissing] = useState<string[]>([]);
   const [sent, setSent] = useState(false); const [fatal, setFatal] = useState(false);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
+  const [fulfil, setFulfil] = useState<'not_applicable' | 'in_progress' | 'completed'>('not_applicable');
   const locale = useLocale();
   const key = useRef(newKey());
-  const load = useCallback(() => api.caseDetail(caseId).then((d) => { setC(d); setData(d.data); return api.timeline(caseId).then((x) => setTimeline(x.timeline ?? [])); }).catch(() => setFatal(true)), [caseId]);
+  const load = useCallback(() => api.caseDetail(caseId).then((d) => { setC(d); setData(d.data); return Promise.all([api.timeline(caseId).then((x) => setTimeline(x.timeline ?? [])), api.fulfilment(caseId).then((f) => setFulfil(f.fulfilment)).catch(() => setFulfil('not_applicable'))]); }).catch(() => setFatal(true)), [caseId]);
   useEffect(() => { void load(); }, [load]);
   const { files, onFile } = useUploads(c?.documents ?? NO_DOCS, (k, f, s, i) => api.uploadCaseDocument(caseId, k, f, s, i).then(async (r) => { await load(); return r; }));
 
@@ -151,6 +152,7 @@ export function CaseView({ caseId, back }: { caseId: string; back: () => void })
       <p><StatusBadge status={c.customerStatus} /></p>
       <p className="status">{t('service.notapproval')}</p>
       {c.decision && <div className="card" role="region" aria-label={t('case.decision')}><h2>{t('case.decision')}</h2><p>{c.decision.message[locale]}</p></div>}
+      {c.decision && fulfil !== 'not_applicable' && <div className="card" role="region" aria-label={t('fulfil.title')}><h2>{t('fulfil.title')}</h2><p>{t(`fulfil.${fulfil}`)}</p></div>}
       <h2>{t('case.timeline')}</h2>
       <Timeline items={timeline} />
       {sent && <p role="status" className="status">{t('case.responded')}</p>}

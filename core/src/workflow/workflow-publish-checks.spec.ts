@@ -1,5 +1,5 @@
 import { workflowValidator } from './workflow-publish-checks';
-import { REFERENCE_WORKFLOW } from './workflow-fixtures';
+import { PILOT_CERTIFICATE_WORKFLOW, REFERENCE_WORKFLOW } from './workflow-fixtures';
 import { WorkflowDef } from './workflow-schema';
 
 const run = (d: unknown) => workflowValidator('workflow', d as Record<string, unknown>);
@@ -10,6 +10,7 @@ const mutate = (fn: (d: WorkflowDef) => void) => { const d = clone(); fn(d); ret
 describe('workflow publish checks (CFG-03, WFL-02, WFL-08, STS-01, TAT-04, APR-03, DEC-04)', () => {
   it('passes the reference workflow and ignores other kinds', () => {
     expect(run(REFERENCE_WORKFLOW())).toEqual({ ok: true, errors: [] });
+    expect(run(PILOT_CERTIFICATE_WORKFLOW())).toEqual({ ok: true, errors: [] });   // the pilot service's workflow passes the same checks (WFL-01, WFL-02, WFL-08)
     expect(workflowValidator('form', {})).toEqual({ ok: true, errors: [] });
   });
 
@@ -49,4 +50,11 @@ describe('workflow publish checks (CFG-03, WFL-02, WFL-08, STS-01, TAT-04, APR-0
     (e.nodes.screening as { outcomes: { complete: string } }).outcomes.complete = 'checks';
     expect(errors(e)).toMatch(/unreachable|WFL-02/);
   });
+
+  it('APR-03: an approval is either non-monetary or has an amount field, never both', () => {
+    const w = JSON.parse(JSON.stringify(PILOT_CERTIFICATE_WORKFLOW())) as WorkflowDef;
+    (w.nodes.approval as { amountField?: string }).amountField = 'amount';
+    expect(run(w).errors.join()).toContain('non-monetary');
+  });
 });
+

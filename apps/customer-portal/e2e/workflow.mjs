@@ -165,6 +165,7 @@ check('customer: no rationale, task names, staff names or internal terms anywher
 await axe(cust, 'customer decided case'); await noOverflow(cust, 'customer decided case'); await cust.screenshot({ path: `${OUT}customer-2-decision.png`, fullPage: true });
 await cust.getByRole('button', { name: /^notifications/i }).click();
 await cust.getByRole('heading', { name: 'Notifications' }).waitFor();
+await cust.getByText(/There is an update on application/).first().waitFor();
 check('customer: notification centre lists the updates with generic wording', (await cust.getByText(/There is an update on application/).first().isVisible()) && (await cust.getByText(/We received your/).first().isVisible()));
 await axe(cust, 'customer notifications');
 

@@ -18,7 +18,7 @@ import { CoreBankingPort, OtpDelivery } from '../src/customer-profile';
 import { migrate } from '../src/platform/migrate';
 import { AppLogger } from '../src/platform';
 import { EicarTestScanner, MalwareScanner } from '../src/document-evidence';
-import { REFERENCE_WORKFLOW } from '../src/workflow';
+import { PILOT_CERTIFICATE_WORKFLOW, REFERENCE_WORKFLOW } from '../src/workflow';
 import { LocalFsObjectStore, ObjectStore } from '../src/platform';
 import { mkdtempSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
@@ -57,7 +57,7 @@ async function main() {
       { name: 'officerA', actor: 'staff', role: 'branch_officer', branch: 'A' }, { name: 'officerA2', actor: 'staff', role: 'branch_officer', branch: 'A' },
       { name: 'compliance', actor: 'staff', role: 'compliance_officer', branch: 'A' }, { name: 'lead', actor: 'staff', role: 'team_lead', branch: 'A' },
       { name: 'approverSmall', actor: 'staff', role: 'approver', branch: 'A', maxAmount: 50000 }, { name: 'approverBig', actor: 'staff', role: 'approver', branch: 'A', maxAmount: 10_000_000 },
-      { name: 'sched', actor: 'integration', role: 'integration_service' },
+      { name: 'ops', actor: 'staff', role: 'operations_officer', branch: 'A' }, { name: 'sched', actor: 'integration', role: 'integration_service' },
     ], 'demo');
     // Synthetic staff logins for local walkthroughs and the browser test. Written to a file the developer controls; never used outside development.
     writeFileSync(process.env.DEV_SECRETS_FILE ?? join(tmpdir(), 'bbjp-dev-secrets.json'), JSON.stringify({ password: PASSWORD, institution: 'demo', totp: Object.fromEntries(Object.entries(seed.users).map(([k, u]) => [k, u.secret])) }));
@@ -86,6 +86,16 @@ async function main() {
       whoCanApply: loc('Existing customers with a linked relationship.', 'जोडिएको सम्बन्ध भएका वर्तमान ग्राहक।'), fees: loc('Fees shown at offer stage (demo)', 'प्रस्ताव चरणमा शुल्क देखाइन्छ (डेमो)'),
       supportChannel: loc('Visit any branch (demo)', 'कुनै पनि शाखामा जानुहोस् (डेमो)'),
       visitReason: loc('The bank may ask to see original documents in a branch before a decision.', 'निर्णय अघि बैंकले शाखामा मूल कागजात हेर्न माग्न सक्छ।') });
+    // Pilot service (Phase 5): a certificate request. One review, one approval, then a controlled hand-off that a person at the bank confirms.
+    await publish(maker, checker, 'form', 'certificate-form', { fields: [
+      { key: 'reason', type: 'select', label: L('What is the certificate for?', 'प्रमाणपत्र किन चाहिएको हो?'), required: true, privacy: 'internal', options: [{ value: 'embassy', label: L('Embassy or visa', 'दूतावास वा भिसा') }, { value: 'school', label: L('School or university', 'विद्यालय वा विश्वविद्यालय') }, { value: 'other', label: L('Something else', 'अन्य') }] },
+      { key: 'id_photo', type: 'file', label: L('Photo of your ID', 'तपाईंको परिचयपत्रको फोटो'), required: true, privacy: 'restricted', documentKey: 'id_front', accept: ['image/jpeg', 'image/png'] },
+    ] });
+    await publish(maker, checker, 'workflow', 'certificate-flow', PILOT_CERTIFICATE_WORKFLOW());
+    await publish(maker, checker, 'service', 'certificate-request', { ...base, formKey: 'certificate-form', workflowKey: 'certificate-flow', requiresExistingRelationship: false, remoteClass: 'remote_capable', documents: ['A photo of your ID'],
+      fulfilment: { connector: 'controlled-handoff', operation: 'issue_certificate' },
+      title: loc('Certificate request (pilot)', 'प्रमाणपत्र अनुरोध (पाइलट)'), description: loc('Ask for a certificate. A person reviews and approves it; the bank then issues it.', 'प्रमाणपत्र अनुरोध गर्नुहोस्। व्यक्तिले समीक्षा र स्वीकृत गर्छन्; त्यसपछि बैंकले जारी गर्छ।'),
+      whoCanApply: loc('Account holders.', 'खातावाला।'), fees: loc('No fee (demo)', 'शुल्क छैन (डेमो)'), supportChannel: loc('Call 1660-00-00000 (demo)', 'फोन 1660-00-00000 (डेमो)') });
     process.stdout.write('[dev] seeded demo institution\n');
   }
   const port = Number(process.env.PORT ?? 3100);

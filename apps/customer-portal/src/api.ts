@@ -65,6 +65,7 @@ export const api = {
     return json as Receipt;
   },
   timeline: (id: string) => call<{ timeline: TimelineItem[] }>('GET', `/customer/cases/${encodeURIComponent(id)}/timeline`),
+  fulfilment: (id: string) => call<{ fulfilment: 'not_applicable' | 'in_progress' | 'completed' }>('GET', `/customer/cases/${encodeURIComponent(id)}/fulfilment`),
   notifications: () => call<NotificationItem[]>('GET', '/customer/notifications'),
   markRead: (id: string) => call<void>('POST', `/customer/notifications/${encodeURIComponent(id)}/read`),
   cases: () => call<CaseSummary[]>('GET', '/customer/cases'),

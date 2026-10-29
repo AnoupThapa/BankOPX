@@ -17,3 +17,17 @@ export const REFERENCE_WORKFLOW = (over: Partial<WorkflowDef['nodes']> = {}): Wo
     ...over,
   } as WorkflowDef['nodes'],
 });
+
+/**
+ * The first pilot service (docs/18 Phase 5): a certificate request with one review step and one approval, no amount to check.
+ * SLA hours are placeholders [BANK-DECIDES]; the bank sets the real targets in the workflow designer before go-live.
+ */
+export const PILOT_CERTIFICATE_WORKFLOW = (): WorkflowDef => ({
+  start: 'review',
+  nodes: {
+    review: { type: 'task', title: L('Request review'), permission: 'case.review', queue: 'review', customerStatus: 'under_review', sla: sla(24), canReturn: true, outcomes: { complete: 'approval' } },
+    approval: { type: 'approval', title: L('Approval'), permission: 'case.approve', queue: 'approval', customerStatus: 'under_review', sla: sla(48), nonMonetary: true, separateFrom: ['review'], canReturn: true, outcomes: { approve: 'approved_end', decline: 'declined_end' } },
+    approved_end: { type: 'end', outcome: 'approved', customerMessage: L('A decision has been made on your request. Please sign in to continue.') },
+    declined_end: { type: 'end', outcome: 'declined', customerMessage: L('A decision has been made on your request. Please sign in to read it.') },
+  },
+});
