@@ -1,0 +1,25 @@
+{
+  "name": "bbjp",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Branchless Banking Journey Platform",
+  "workspaces": [
+    "core",
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "traceability": "node scripts/traceability.mjs",
+    "ci": "npm run lint && npm run typecheck && npm run test && npm run traceability"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "overrides": {
+    "@types/estree": "1.0.8",
+    "multer": "^2.5.0"
+  }
+}

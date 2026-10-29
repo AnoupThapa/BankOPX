@@ -57,6 +57,12 @@ Add questions as they arise (Q21+). Close a question by recording the decision, 
 | ID | Date | Assumption | Related rule/ADR | Owner | Revisit by | Status |
 |---|---|---|---|---|---|---|
 | A-001 | | *Example:* Pilot uses file exchange because CBS APIs are unavailable | INT-08, ADR-017 | | | Open |
+| A-002 | 2026-10-29 | Stack is TypeScript/NestJS 11/React/PostgreSQL until the design-partner bank states its technology standards | ADR-016, ADR-023 | Tech lead | Phase 1 gate | Open |
+| A-003 | 2026-10-29 | Staff MFA is TOTP in Phase 1 as a stand-in for a bank-approved provider; bank SSO (IDN-11) replaces it later | IDN-08, ADR-010 | Security lead | Phase 9 | Open `[BANK-DECIDES]` |
+| A-004 | 2026-10-29 | Session idle timeout 15 min and absolute 12 h are defaults, not bank policy | IDN-09 | Security lead | Phase 1 gate | Open `[BANK-DECIDES]` |
+| A-005 | 2026-10-29 | Workflow-engine adopt-vs-build spike moves from Phase 1 to the start of Phase 4 | ADR-018 | Tech lead | Phase 4 | Open |
+| A-006 | 2026-10-29 | Nepali UI strings are placeholders until the bank supplies approved translations | ADR-019 | Product owner | Phase 2 | Open |
+| A-007 | 2026-10-29 | Staff-entered free-text reasons are stored in audit and must not contain personal data | SEC-03 | Product owner | Phase 4 training | Open |
 
 **Rule:** an assumption touching legal validity, KYC, AML, credit thresholds, approval limits, retention, residency, hosting or provider selection must be confirmed by the bank before production use.
 

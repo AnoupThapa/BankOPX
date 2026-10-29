@@ -114,3 +114,14 @@ bbjp/
 ## 7. Team minimum for a regulated pilot
 
 Product owner with banking-operations knowledge · banking BA/process designer · technical lead/architect · frontend engineer · backend/workflow engineer · integration engineer · QA automation engineer · UI/UX designer · DevSecOps/security engineer · bank implementation lead · bank-supplied legal/compliance advisers. A demo that works is **not** production-grade bank security.
+
+## 8. Developing locally (Phase 1 foundation)
+
+```bash
+npm install
+sudo service postgresql start && PSQL="sudo -u postgres psql" infra/dev-db.sh
+npm run ci            # lint, typecheck, tests, traceability
+npm run dev -w @bbjp/design-gallery   # UI component gallery
+```
+
+Phase reports and evidence live in `docs/phase-1/`. New ADRs go in `adr/`.
