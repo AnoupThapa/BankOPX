@@ -209,6 +209,10 @@ export class ProfileService {
     return this.db.withTenant(institutionId, async (tx) => (await tx.query('SELECT id FROM customer_profile WHERE user_id=$1', [userId])).rows[0]?.id ?? null);
   }
 
+  async userIdOfProfile(tx: Tx, profileId: string): Promise<string | null> {
+    return (await tx.query('SELECT user_id FROM customer_profile WHERE id=$1', [profileId])).rows[0]?.user_id ?? null;
+  }
+
   async homeBranchOf(tx: Tx, profileId: string): Promise<string | null> {
     return (await tx.query('SELECT home_branch_id FROM customer_profile WHERE id=$1', [profileId])).rows[0]?.home_branch_id ?? null;
   }

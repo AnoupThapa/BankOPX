@@ -89,7 +89,8 @@ export function decide(p: Principal, permission: Permission, r: Resource, now: D
       if (!r.branchId || !g.branchIds.includes(r.branchId)) continue;
       if (g.departments.length && (!r.department || !g.departments.includes(r.department))) continue;
       if (g.products.length && (!r.product || !g.products.includes(r.product))) continue;
-      if (g.maxAmount !== null && (r.amount === undefined || r.amount > g.maxAmount)) continue; // APR-03
+      // Authority limits govern decisions only: an approver with a limit can still open and read cases (APR-03).
+      if (permission === 'case.approve' && g.maxAmount !== null && (r.amount === undefined || r.amount > g.maxAmount)) continue;
     }
     return { allow: true, reason: 'granted' };
   }

@@ -35,6 +35,9 @@ export class CaseController {
   @Get('cases/by-code/:code') @RequirePermission('application.read')
   byCode(@Req() req: AuthedRequest, @Param('code') c: string) { return this.cases.findMineByCode(this.s(req), c); }
 
+  @Get('cases/:id/timeline') @RequirePermission('application.read')
+  timeline(@Req() req: AuthedRequest, @Param('id') id: string) { return this.cases.customerTimeline(this.s(req), id); }
+
   @Get('cases/:id') @RequirePermission('application.read')
   get(@Req() req: AuthedRequest, @Param('id') id: string) { return this.cases.getMine(this.s(req), id); }
 

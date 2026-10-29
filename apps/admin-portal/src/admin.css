@@ -8,3 +8,4 @@
 @media (min-width: 1000px) { .dz-grid { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); } .dz-grid .dz-aside { position: sticky; top: var(--bbjp-space-3); align-self: start; } }
 .dz-preview { border: 2px dashed var(--bbjp-border); border-radius: var(--bbjp-radius); padding: var(--bbjp-space-3); overflow-x: auto; background: var(--bbjp-bg); }
 .dz-phone { max-width: 360px; } .dz-desktop { max-width: 100%; }
+.outline { background: var(--bbjp-surface); padding: var(--bbjp-space-3); border-radius: var(--bbjp-radius); overflow-x: auto; white-space: pre-wrap; }

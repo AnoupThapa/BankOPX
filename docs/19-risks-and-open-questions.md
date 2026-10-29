@@ -74,6 +74,14 @@ Add questions as they arise (Q21+). Close a question by recording the decision, 
 | A-016 | 2026-10-29 | The object store and malware scanner are ports with refusing defaults; local disk and a test-string scanner exist for development only. Product choice, key management and retention are the bank's | DOC-02, DOC-04, DOC-15, ADR-009 | IT architecture | Phase 3 gate | Open `[BANK-DECIDES]` |
 | A-017 | 2026-10-29 | A case's branch is the customer's home branch when it is submitted; cases with no branch are visible to no staff until Phase 4 routing exists | SEC-12 | Product owner | Phase 4 | Open |
 | A-018 | 2026-10-29 | Mandatory documents are enforced at submission only; "mandatory before approval, signing or fulfilment" needs the Phase 4 engine | DOC-13 | Product owner | Phase 4 | Open |
+| A-019 | 2026-10-29 | Notification templates live in code (generic wording only); bank-approved wording and languages must become configuration | NOT-01, NOT-02 | Product owner | Phase 5 | Open |
+| A-020 | 2026-10-29 | Only an "always" SLA calendar exists; working days and holidays are not modelled | TAT-03 | Bank operations | Phase 5 | Open |
+| A-021 | 2026-10-29 | No timers: escalation and SLA breach evaluation run from a manual endpoint; a scheduler is needed before pilot | WFL-08 | Engineering | Phase 5 | Open |
+| A-022 | 2026-10-29 | No UI for assigning a task to another person (API exists) | QUE-01 | Product owner | Phase 5 | Open |
+| A-023 | 2026-10-29 | Reconsideration / linked-case flow not built | WFL-05 | Product owner | Phase 5 | Open |
+| A-024 | 2026-10-29 | Authority limits, SLA durations and customer status labels in tests and the dev seed are synthetic | APR-03, STS-01 | Bank | Phase 5 | Bank decides |
+| A-025 | 2026-10-29 | Outbound delivery of notifications (SMS/email/push) is not connected; only in-app | NOT-01 | Engineering | Phase 5 | Open |
+| A-026 | 2026-10-29 | A-018 partially addressed: workflow can gate approval, but per-service mandatory-document gating needs bank configuration | DOC-13 | Product owner | Phase 5 | Open |
 
 **Rule:** an assumption touching legal validity, KYC, AML, credit thresholds, approval limits, retention, residency, hosting or provider selection must be confirmed by the bank before production use.
 

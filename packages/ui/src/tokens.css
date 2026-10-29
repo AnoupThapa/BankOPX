@@ -47,3 +47,7 @@ body { margin: 0; font-size: 1rem; line-height: 1.5; }
 .bbjp-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .bbjp-visually-hidden:focus-visible + .bbjp-btn { outline: 3px solid var(--bbjp-focus); outline-offset: 2px; }
 .bbjp-calc { margin-block: var(--bbjp-space-3); }
+
+.bbjp-timeline { list-style: none; padding: 0; margin: var(--bbjp-space-3) 0; border-left: 4px solid var(--bbjp-border); }
+.bbjp-timeline li { padding: var(--bbjp-space-2) var(--bbjp-space-3); position: relative; }
+.bbjp-timeline time { display: block; color: var(--bbjp-muted); font-size: .875rem; }

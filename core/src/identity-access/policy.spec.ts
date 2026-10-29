@@ -49,6 +49,12 @@ describe('policy decision point', () => {
     expect(r(1000.01)).toBe(false);
     expect(r(undefined)).toBe(false);
   });
+  it('APR-03: an authority limit applies to decisions only; an approver with a limit can still read cases that carry no amount', () => {
+    const p = base({ assignments: [{ role: 'approver', branchIds: ['A'], departments: [], products: [], maxAmount: 1000, validFrom: past, validTo: null }] });
+    expect(decide(p, 'case.read', { institutionId: INST, branchId: 'A' }).allow).toBe(true);
+    expect(decide(p, 'case.approve', { institutionId: INST, branchId: 'A' }).allow).toBe(false);          // no amount known: no decision
+    expect(decide(p, 'case.approve', { institutionId: INST, branchId: 'A', amount: 999 }).allow).toBe(true);
+  });
   it('APR-04: expired or revoked delegations grant nothing; live ones are limited by their own scope', () => {
     const none = base({ assignments: [] });
     const mk = (validFrom: Date, validTo: Date, revokedAt: Date | null = null, maxAmount: number | null = 100) =>

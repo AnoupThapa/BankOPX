@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, FormRenderer, StatusBadge, useLocale, useT } from '@bbjp/ui';
+import { Button, FormRenderer, StatusBadge, Timeline, useLocale, useT } from '@bbjp/ui';
 import type { Data, FileState } from '@bbjp/ui';
-import { api, ApiError, AppDraft, CaseDetail, CaseSummary, DocView, errorsByPath, Receipt, Service } from './api';
+import { api, ApiError, AppDraft, CaseDetail, CaseSummary, DocView, errorsByPath, NotificationItem, Receipt, Service, TimelineItem } from './api';
 
 const newKey = () => (globalThis.crypto?.randomUUID?.() ?? `k-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
@@ -126,8 +126,10 @@ export function CaseView({ caseId, back }: { caseId: string; back: () => void })
   const [data, setData] = useState<Data>({});
   const [errors, setErrors] = useState<Record<string, string[]>>({}); const [missing, setMissing] = useState<string[]>([]);
   const [sent, setSent] = useState(false); const [fatal, setFatal] = useState(false);
+  const [timeline, setTimeline] = useState<TimelineItem[]>([]);
+  const locale = useLocale();
   const key = useRef(newKey());
-  const load = useCallback(() => api.caseDetail(caseId).then((d) => { setC(d); setData(d.data); }).catch(() => setFatal(true)), [caseId]);
+  const load = useCallback(() => api.caseDetail(caseId).then((d) => { setC(d); setData(d.data); return api.timeline(caseId).then((x) => setTimeline(x.timeline ?? [])); }).catch(() => setFatal(true)), [caseId]);
   useEffect(() => { void load(); }, [load]);
   const { files, onFile } = useUploads(c?.documents ?? NO_DOCS, (k, f, s, i) => api.uploadCaseDocument(caseId, k, f, s, i).then(async (r) => { await load(); return r; }));
 
@@ -148,6 +150,9 @@ export function CaseView({ caseId, back }: { caseId: string; back: () => void })
       <h1 id="case-h">{c.trackingCode}</h1>
       <p><StatusBadge status={c.customerStatus} /></p>
       <p className="status">{t('service.notapproval')}</p>
+      {c.decision && <div className="card" role="region" aria-label={t('case.decision')}><h2>{t('case.decision')}</h2><p>{c.decision.message[locale]}</p></div>}
+      <h2>{t('case.timeline')}</h2>
+      <Timeline items={timeline} />
       {sent && <p role="status" className="status">{t('case.responded')}</p>}
       {c.request && (
         <div className="card" role="region" aria-label={t('case.request.title')}>
@@ -166,6 +171,26 @@ export function CaseView({ caseId, back }: { caseId: string; back: () => void })
       </form>
       <h2>{t('case.history')}</h2>
       <ul>{c.versions.map((v) => <li key={v.version}>{t('case.version')} {v.version} · {t(`case.${v.kind}`)} · {new Date(v.at).toLocaleString()}</li>)}</ul>
+    </section>
+  );
+}
+
+export function NotificationsView({ open, changed }: { open: (caseId: string) => void; changed: () => void }) {
+  const t = useT();
+  const [items, setItems] = useState<NotificationItem[] | null>(null);
+  const load = useCallback(() => api.notifications().then(setItems).catch(() => setItems([])), []);
+  useEffect(() => { void load(); }, [load]);
+  return (
+    <section aria-labelledby="nf-h">
+      <h1 id="nf-h">{t('notif.title')}</h1>
+      {items === null ? <p role="status">{t('common.loading')}</p> : items.length === 0 ? <p>{t('notif.empty')}</p> : (
+        <ul style={{ listStyle: 'none', padding: 0 }}>{items.map((n) => (
+          <li key={n.id} className="card">
+            <p>{n.read ? '' : <strong>{t('notif.unread')} · </strong>}{t(`notif.${n.template}`).replace('{code}', n.code)}</p>
+            <p className="hint">{new Date(n.at).toLocaleString()}</p>
+            <Button variant="secondary" onClick={() => open(n.caseId)}>{t('notif.open')} {n.code}</Button>
+            {!n.read && <Button variant="secondary" onClick={async () => { await api.markRead(n.id); await load(); changed(); }}>{t('notif.mark')} {n.code}</Button>}
+          </li>))}</ul>)}
     </section>
   );
 }

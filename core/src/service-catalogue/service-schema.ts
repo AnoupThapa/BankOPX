@@ -22,6 +22,7 @@ export const serviceValidator: ConfigValidator = (kind, c) => {
   if (typeof c.signatureSupport !== 'string') e.push('SVC-03: signatureSupport required');
   if (c.remoteClass && c.remoteClass !== 'remote_capable' && !isLocaleMap(c.visitReason)) e.push('SVC-02: a visit reason (en and ne) is required when attendance may be needed');
   if (c.formKey !== undefined && (typeof c.formKey !== 'string' || !/^[a-z0-9_.-]{1,64}$/.test(c.formKey))) e.push('SVC-03: formKey must name a form');
+  if (c.workflowKey !== undefined && (typeof c.workflowKey !== 'string' || !/^[a-z0-9_.-]{1,64}$/.test(c.workflowKey))) e.push('WFL-01: workflowKey must name a workflow');
   const a = c.availability as Record<string, unknown> | undefined;
   for (const k of ['channels', 'branches', 'currencies', 'segments']) if (!a || !isStringArray(a[k])) e.push(`SVC-06: availability.${k} must list values or ['*']`);
   return { ok: e.length === 0, errors: e };

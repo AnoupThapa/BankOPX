@@ -7,6 +7,9 @@ import { verifyPassword } from './password';
 import { Principal } from './policy';
 import { ActorType } from './permissions';
 
+// TOTP tolerates one 30-second step either side for clock drift and the moment a code is typed (standard practice).
+authenticator.options = { window: 1 };
+
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 const MAX_FAILED = 5;
 const MFA_ACTORS: ActorType[] = ['staff', 'admin', 'auditor'];
@@ -103,6 +106,13 @@ export class AuthService {
       await tx.query('UPDATE app_session SET last_seen_at = now() WHERE id=$1', [s.id]);
       return { sessionId: s.id, csrfHash: s.csrf_hash, stepUpAt: s.stepup_at, principal: await this.loadPrincipal(tx, institutionId, s.user_id, s.actor_type, s.mfa_verified) };
     });
+  }
+
+  /** A user's principal as it would be evaluated for eligibility (used to check that a task can be assigned to someone). MFA state is treated as satisfied: it is checked when they act. */
+  async principalOf(tx: Tx, institutionId: string, userId: string): Promise<Principal | null> {
+    const u = (await tx.query(`SELECT actor_type, status FROM user_account WHERE id=$1`, [userId])).rows[0];
+    if (!u || u.status !== 'active') return null;
+    return this.loadPrincipal(tx, institutionId, userId, u.actor_type, true);
   }
 
   verifyCsrf(info: SessionInfo, header: string | undefined): boolean {

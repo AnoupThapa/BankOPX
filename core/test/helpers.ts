@@ -29,7 +29,7 @@ export interface Seed { instId: string; code: string; branchA: string; branchB: 
 
 let counter = 0;
 /** Creates an institution with synthetic users only (SEC-09). */
-export async function seedInstitution(roles: Array<{ name: string; actor: string; role?: string; branch?: 'A' | 'B'; highRiskApproved?: boolean; maxAmount?: number }>, fixedCode?: string): Promise<Seed> {
+export async function seedInstitution(roles: Array<{ name: string; actor: string; role?: string; branch?: 'A' | 'B'; highRiskApproved?: boolean; maxAmount?: number; extra?: Array<{ role: string; branch?: 'A' | 'B'; maxAmount?: number }> }>, fixedCode?: string): Promise<Seed> {
   const code = fixedCode ?? `bank${Date.now()}${counter++}`;
   const inst = (await owner.query('INSERT INTO institution(code, name) VALUES ($1,$1) RETURNING id', [code])).rows[0].id as string;
   const pw = await hashPassword(PASSWORD);
@@ -49,6 +49,10 @@ export async function seedInstitution(roles: Array<{ name: string; actor: string
       const approver = r.highRiskApproved ? users[roles.find((x) => x.role === 'security_admin' && x.name !== r.name)?.name ?? r.name]!.id : users[r.name]!.id;
       await q(`INSERT INTO role_assignment(institution_id, user_id, role, branch_ids, max_amount, granted_by, approved_by) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
         [inst, users[r.name]!.id, r.role, r.branch ? [r.branch === 'A' ? branchA : branchB] : [], r.maxAmount ?? null, users[r.name]!.id, r.highRiskApproved ? approver : users[r.name]!.id]);
+    }
+    for (const r of roles) for (const x of r.extra ?? []) {
+      await q(`INSERT INTO role_assignment(institution_id, user_id, role, branch_ids, max_amount, granted_by, approved_by) VALUES ($1,$2,$3,$4,$5,$6,$6)`,
+        [inst, users[r.name]!.id, x.role, x.branch ? [x.branch === 'A' ? branchA : branchB] : [], x.maxAmount ?? null, users[r.name]!.id]);
     }
     return { instId: inst, code, branchA, branchB, users };
   });
