@@ -34,8 +34,11 @@ export interface DocView { requirementKey: string; versionId: string; seq: numbe
 export interface Validation { errors: Array<{ path: string; code: string }>; suggestions: Array<{ path: string; suggested: string; reason: string }> }
 export interface AppDraft { data: Data; pinned: boolean; form: FormView | null; documents: DocView[] }
 export interface Receipt { caseId: string; trackingCode: string; submittedAt: string; customerStatus: string; submittedItems: { fields: string[]; documents: string[] }; outstanding: { optionalDocuments: string[] }; underReviewNotApproved: true }
-export interface CaseSummary { caseId: string; trackingCode: string; serviceKey: string; customerStatus: 'received' | 'under_review' | 'more_info_needed'; submittedAt: string }
+export interface CaseSummary { caseId: string; trackingCode: string; serviceKey: string; customerStatus: 'received' | 'under_review' | 'more_info_needed' | 'decision_made'; submittedAt: string }
+export interface TimelineItem { key: string; at: string }
+export interface NotificationItem { id: string; caseId: string; template: string; code: string; at: string; read: boolean }
 export interface CaseDetail extends CaseSummary {
+  decision: { message: Localised; at: string } | null;
   request: { requestId: string; reasonCode: string; text: string; items: Array<{ type: string; key: string; text: string }>; dueAt: string | null } | null;
   documents: DocView[]; versions: Array<{ version: number; kind: string; at: string }>; form: FormView | null; data: Data;
 }
@@ -61,6 +64,9 @@ export const api = {
     if (!r.ok) throw new ApiError(r.status, json);
     return json as Receipt;
   },
+  timeline: (id: string) => call<{ timeline: TimelineItem[] }>('GET', `/customer/cases/${encodeURIComponent(id)}/timeline`),
+  notifications: () => call<NotificationItem[]>('GET', '/customer/notifications'),
+  markRead: (id: string) => call<void>('POST', `/customer/notifications/${encodeURIComponent(id)}/read`),
   cases: () => call<CaseSummary[]>('GET', '/customer/cases'),
   caseDetail: (id: string) => call<CaseDetail>('GET', `/customer/cases/${encodeURIComponent(id)}`),
   uploadCaseDocument: (caseId: string, requirementKey: string, file: File, source: 'camera' | 'upload', key: string) =>

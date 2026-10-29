@@ -3,11 +3,11 @@ import { Button, LocaleProvider, StatusBadge, Tag, TextField, useLocale, useT } 
 import type { Locale } from '@bbjp/ui';
 import './portal.css';
 import { api, ApiError, Localised, Notice, Profile, Receipt, Service, setCsrf } from './api';
-import { ApplicationView, CaseView, CasesView, ReceiptView } from './applications';
+import { ApplicationView, CaseView, CasesView, NotificationsView, ReceiptView } from './applications';
 import { EXTRA } from './messages';
 
 type View = { name: 'home' } | { name: 'link' } | { name: 'catalogue' } | { name: 'service'; key: string } | { name: 'apply'; key: string }
-  | { name: 'receipt'; receipt: Receipt } | { name: 'cases' } | { name: 'case'; id: string };
+  | { name: 'receipt'; receipt: Receipt } | { name: 'cases' } | { name: 'case'; id: string } | { name: 'notifications' };
 
 export function App() {
   const [locale, setLocale] = useState<Locale>('en');
@@ -23,10 +23,13 @@ function Shell({ locale, setLocale }: { locale: Locale; setLocale: (l: Locale) =
   const [profile, setProfile] = useState<Profile | null | 'loading'>('loading');
   const [view, setView] = useState<View>({ name: 'home' });
   const [signOutFailed, setSignOutFailed] = useState(false);
+  const [unread, setUnread] = useState(0);
+  const refreshUnread = useCallback(() => api.notifications().then((n) => setUnread(n.filter((x) => !x.read).length)).catch(() => setUnread(0)), []);
   const refresh = useCallback(async () => {
     try { setProfile(await api.profile()); } catch (e) { if (e instanceof ApiError && (e.status === 401 || e.status === 403)) { setCsrf(null); setProfile(null); } else setProfile(null); }
   }, []);
   useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => { if (profile && profile !== 'loading') void refreshUnread(); }, [profile, view, refreshUnread]);
   useEffect(() => { document.documentElement.lang = locale; document.title = t('app.title'); }, [locale, t]);
 
   return (
@@ -38,6 +41,7 @@ function Shell({ locale, setLocale }: { locale: Locale; setLocale: (l: Locale) =
             <Button variant="secondary" onClick={() => setView({ name: 'home' })}>{t('nav.home')}</Button>
             <Button variant="secondary" onClick={() => setView({ name: 'catalogue' })}>{t('nav.services')}</Button>
             <Button variant="secondary" onClick={() => setView({ name: 'cases' })}>{t('nav.applications')}</Button>
+            <Button variant="secondary" onClick={() => setView({ name: 'notifications' })}>{t('nav.notifications')}{unread > 0 ? ` (${unread})` : ''}</Button>
           </>)}
           {profile && profile !== 'loading' && <Button variant="secondary" onClick={async () => {
             // Only show "signed out" once the server has revoked the session; otherwise say so (IDN-09).
@@ -57,6 +61,7 @@ function Shell({ locale, setLocale }: { locale: Locale; setLocale: (l: Locale) =
           : view.name === 'service' ? <ServiceView key={view.key} locale={locale} serviceKey={view.key} go={setView} />
           : view.name === 'apply' ? <ApplyLoader key={view.key} serviceKey={view.key} go={setView} />
           : view.name === 'receipt' ? <ReceiptView receipt={view.receipt} toApplications={() => setView({ name: 'cases' })} />
+          : view.name === 'notifications' ? <NotificationsView open={(id) => setView({ name: 'case', id })} changed={refreshUnread} />
           : view.name === 'cases' ? <CasesView open={(id) => setView({ name: 'case', id })} />
           : <CaseView key={view.id} caseId={view.id} back={() => setView({ name: 'cases' })} />}
       </main>

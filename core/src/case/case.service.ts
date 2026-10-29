@@ -11,6 +11,10 @@ import { CUSTOMER_STATUS, CaseState, RETURN_REASON_CODES, TRANSITIONS } from './
 
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';           // no look-alikes
 /** Random, non-informative, non-sequential locator (SUB-01). ~50 bits; it is not a credential and is never accepted as one. */
+export interface CaseContext { trackingCode?: string; caseId: string; institutionId: string; serviceKey: string; serviceVersionId: string; branchId: string | null; profileId: string; formVersionId: string | null }
+export type SubmitHook = (tx: Tx, c: CaseContext, actor: { id: string; type: string }) => Promise<void>;
+export type RespondHook = (tx: Tx, c: CaseContext, actor: { id: string; type: string }) => Promise<void>;
+
 export const newTrackingCode = () => Array.from({ length: 10 }, () => ALPHABET[randomInt(ALPHABET.length)]).join('').replace(/^(.{5})(.{5})$/, 'BB-$1-$2');
 
 interface Item { type: 'field' | 'document' | 'question'; key: string; text: string }
@@ -23,7 +27,12 @@ export class CaseService {
   ) {}
 
   // ---------- transitions (WFL-03, WFL-04) ----------
-  private async transition(tx: Tx, inst: string, caseId: string, to: CaseState, actor: { id: string; type: string }, reason: string) {
+  /** Hooks other modules register to take part in a submission or a customer response inside the same transaction (the workflow engine does). */
+  private readonly hooks: { submitted: SubmitHook[]; responded: RespondHook[] } = { submitted: [], responded: [] };
+  registerHooks(h: { onSubmitted?: SubmitHook; onResponded?: RespondHook }) { if (h.onSubmitted) this.hooks.submitted.push(h.onSubmitted); if (h.onResponded) this.hooks.responded.push(h.onResponded); }
+
+  /** The only way case state changes (WFL-03, WFL-04). A decided case also records outcome, close time and the bank-approved customer wording. */
+  async transition(tx: Tx, inst: string, caseId: string, to: CaseState, actor: { id: string; type: string }, reason: string, close?: { message: { en: string; ne: string } }) {
     const cur = (await tx.query('SELECT internal_state FROM app_case WHERE id=$1 FOR UPDATE', [caseId])).rows[0]?.internal_state as string | undefined;
     const allowed = TRANSITIONS[cur ?? ''] ?? [];
     if (!allowed.includes(to)) {
@@ -31,7 +40,8 @@ export class CaseService {
       throw new ConflictException(`cannot move from ${cur ?? 'new'} to ${to}`);
     }
     await tx.query(`SELECT set_config('app.state_change_via', 'case-transitions', true)`);
-    if (cur) await tx.query('UPDATE app_case SET internal_state=$2 WHERE id=$1', [caseId, to]);
+    if (cur && close) await tx.query('UPDATE app_case SET internal_state=$2, outcome=$2, closed_at=now(), customer_message=$3 WHERE id=$1', [caseId, to, JSON.stringify(close.message)]);
+    else if (cur) await tx.query('UPDATE app_case SET internal_state=$2 WHERE id=$1', [caseId, to]);
     await tx.query('INSERT INTO case_transition (institution_id, case_id, from_state, to_state, actor_id, actor_type, reason) VALUES ($1,$2,$3,$4,$5,$6,$7)', [inst, caseId, cur ?? null, to, actor.id, actor.type, reason]);
     await this.audit.record(tx, { institutionId: inst, actorId: actor.id, actorType: actor.type, action: 'case.transition', objectType: 'app_case', objectId: caseId, reason, priorState: cur, newState: to });
   }
@@ -113,7 +123,7 @@ export class CaseService {
       const run = await this.idem.run(tx, inst, 'case.submit', `${profileId}:${serviceKey}:${idempotencyKey}`, { serviceKey }, async () => {
         const draft = await this.profiles.takeDraft(tx, profileId, serviceKey);
         if (!draft) throw new UnprocessableEntityException({ message: 'nothing_to_submit' });
-        const form = draft.formVersionId ? await this.forms.pinned(inst, draft.formVersionId) : null;
+        const form = draft.formVersionId ? await this.forms.pinned(inst, draft.formVersionId, tx) : null;
         const outcome = form ? validateForm(form.def, draft.data) : { errors: [], suggestions: [], computed: {} };
         const data = (draft.data ?? {}) as Record<string, unknown>;
         // Evidence: every visible required file field needs a version that is not infected (DOC-13).
@@ -138,6 +148,8 @@ export class CaseService {
         await this.docs.attachToCase(tx, { profileId, serviceKey, caseId, branchId });
         // Initial state is recorded through the same transition function, so every case has a complete history.
         await this.recordInitial(tx, inst, caseId, s.principal.userId);
+        const ctx: CaseContext = { trackingCode: tracking, caseId, institutionId: inst, serviceKey, serviceVersionId: draft.serviceVersionId ?? svc.serviceVersionId, branchId, profileId, formVersionId: draft.formVersionId };
+        for (const h of this.hooks.submitted) await h(tx, ctx, { id: s.principal.userId, type: 'customer' });
         await this.audit.record(tx, { institutionId: inst, actorId: s.principal.userId, actorType: 'customer', action: 'case.submitted', objectType: 'app_case', objectId: caseId, detail: { service: serviceKey } });
         const submittedAt = (await tx.query('SELECT submitted_at FROM app_case WHERE id=$1', [caseId])).rows[0].submitted_at as Date;
         const optional = files.filter((f) => !f.required && !byKey.has(f.documentKey)).map((f) => f.documentKey);
@@ -180,11 +192,12 @@ export class CaseService {
       const req = (await tx.query(`SELECT id, reason_code, customer_text, items, due_at, created_at FROM info_request WHERE case_id=$1 AND status='open' ORDER BY created_at DESC LIMIT 1`, [caseId])).rows[0];
       const docs = await this.docs.latestByRequirement(tx, { profileId, serviceKey: c.service_key, caseId });
       const snaps = (await tx.query('SELECT version, kind, created_at FROM application_snapshot WHERE case_id=$1 ORDER BY version', [caseId])).rows;
-      const form = c.form_version_id ? await this.forms.pinned(inst, c.form_version_id) : null;
+      const form = c.form_version_id ? await this.forms.pinned(inst, c.form_version_id, tx) : null;
       const latest = (await tx.query('SELECT data_enc FROM application_snapshot WHERE case_id=$1 ORDER BY version DESC LIMIT 1', [caseId])).rows[0];
       return {
         caseId: c.id, trackingCode: c.tracking_code, serviceKey: c.service_key, customerStatus: CUSTOMER_STATUS[c.internal_state as CaseState], submittedAt: c.submitted_at,
         underReviewNotApproved: true,
+        decision: c.customer_message ? { message: c.customer_message, at: c.closed_at } : null,       // bank-approved wording only (DEC-04)
         request: req ? { requestId: req.id, reasonCode: req.reason_code, text: req.customer_text, items: req.items, dueAt: req.due_at, askedAt: req.created_at } : null,
         documents: docs.map(this.docView), versions: snaps.map((x) => ({ version: x.version, kind: x.kind, at: x.created_at })),
         form: form ? { versionId: form.versionId, version: form.version, definition: form.def } : null,
@@ -201,7 +214,7 @@ export class CaseService {
     return this.db.withTenant(inst, async (tx) => (await this.idem.run(tx, inst, 'case.respond', `${caseId}:${idempotencyKey}`, { data }, async () => {
       const req = (await tx.query(`SELECT id, items, created_at FROM info_request WHERE case_id=$1 AND status='open' FOR UPDATE`, [caseId])).rows[0];
       if (c.internal_state !== 'returned_to_customer' || !req) throw new ConflictException('no_open_request');
-      const form = c.form_version_id ? await this.forms.pinned(inst, c.form_version_id) : null;      // pinned version, even if newer ones exist (FRM-03)
+      const form = c.form_version_id ? await this.forms.pinned(inst, c.form_version_id, tx) : null;      // pinned version, even if newer ones exist (FRM-03)
       const outcome = form ? validateForm(form.def, data) : { errors: [], suggestions: [], computed: {} };
       const latest = await this.docs.latestByRequirement(tx, { profileId, serviceKey: c.service_key, caseId });
       const byKey = new Map(latest.map((d) => [d.requirementKey, d]));
@@ -213,6 +226,7 @@ export class CaseService {
         [inst, caseId, v, c.form_version_id, encryptField(json), keyedHash('snapshot', json), s.principal.userId]);
       await tx.query(`UPDATE info_request SET status='answered', answered_at=now() WHERE id=$1`, [req.id]);
       await this.transition(tx, inst, caseId, 'resubmitted', { id: s.principal.userId, type: 'customer' }, 'customer responded to request');
+      for (const h of this.hooks.responded) await h(tx, { caseId, institutionId: inst, serviceKey: c.service_key, serviceVersionId: c.service_version_id, branchId: c.branch_id, profileId, formVersionId: c.form_version_id, trackingCode: c.tracking_code }, { id: s.principal.userId, type: 'customer' });
       // The responsible queue is told through the audit stream until Phase 4 adds queues and notifications.
       await this.audit.record(tx, { institutionId: inst, actorId: s.principal.userId, actorType: 'customer', action: 'case.customer_responded', objectType: 'app_case', objectId: caseId, detail: { version: v } });
       return { caseId, version: v, customerStatus: CUSTOMER_STATUS.resubmitted };
@@ -247,8 +261,11 @@ export class CaseService {
       const notes = (await tx.query('SELECT author_id, body_enc, created_at FROM case_note WHERE case_id=$1 ORDER BY seq', [caseId])).rows;
       const requests = (await tx.query('SELECT id, reason_code, customer_text, items, status, created_at, answered_at FROM info_request WHERE case_id=$1 ORDER BY created_at', [caseId])).rows;
       await this.audit.record(tx, { institutionId: p.institutionId, actorId: p.userId, actorType: p.actorType, action: 'case.viewed', objectType: 'app_case', objectId: caseId });
+      const form = c.form_version_id ? await this.forms.pinned(p.institutionId, c.form_version_id, tx) : null;
       return {
         caseId, trackingCode: c.tracking_code, serviceKey: c.service_key, state: c.internal_state,
+        // The pinned form's field list lets reviewers target a correction at a real field or document.
+        formFields: (form?.def.fields ?? []).filter((f) => f.type !== 'calculated').map((f) => ({ key: f.key, type: f.type, label: f.label, documentKey: f.documentKey ?? null })),
         snapshots: snaps.map((x) => ({ version: x.version, kind: x.kind, hash: x.data_hash, at: x.created_at, data: JSON.parse(decryptField(x.data_enc)) })),
         documents: await this.docs.historyForCase(tx, caseId), transitions, requests,
         internalNotes: notes.map((n) => ({ authorId: n.author_id, text: decryptField(n.body_enc), at: n.created_at })),
@@ -266,26 +283,67 @@ export class CaseService {
     });
   }
 
-  /** RET-01/02: a reason code, explicitly authored customer text, and at least one targeted item. */
-  async requestInfo(p: Principal, caseId: string, b: { reasonCode?: string; customerText?: string; items?: Item[]; dueAt?: string }) {
+  /**
+   * RET-01/02: a reason code, explicitly authored customer text, and at least one targeted item. Used by the legacy staff route and by workflow tasks.
+   * Validates against the case's pinned form, moves the case to "returned to customer" through the transition function and stores the request.
+   */
+  async requestInformation(tx: Tx, inst: string, actor: { id: string; type: string }, caseId: string, b: { reasonCode?: string; customerText?: string; items?: Item[]; dueAt?: string }, opts: { alreadyReturned?: boolean } = {}) {
     if (!(RETURN_REASON_CODES as readonly string[]).includes(String(b.reasonCode))) throw new BadRequestException('reason code required');
     if (!b.customerText?.trim() || b.customerText.length > 2000) throw new BadRequestException('customer text required');
     const items = Array.isArray(b.items) ? b.items : [];
     if (!items.length || items.length > 20 || items.some((i) => !['field', 'document', 'question'].includes(i?.type) || !i.key || !i.text?.trim())) throw new BadRequestException('at least one targeted item required');
     const customerText = b.customerText.trim();
+    const c = (await tx.query('SELECT form_version_id FROM app_case WHERE id=$1', [caseId])).rows[0];
+    const form = c?.form_version_id ? await this.forms.pinned(inst, c.form_version_id, tx) : null;
+    for (const i of items) {                          // targets must exist in the pinned form
+      const exists = i.type === 'question' || !!form?.def.fields.some((f) => (i.type === 'field' ? f.key === i.key : f.type === 'file' && f.documentKey === i.key));
+      if (!exists) throw new BadRequestException(`unknown target ${i.key}`);
+    }
+    if (!opts.alreadyReturned) await this.transition(tx, inst, caseId, 'returned_to_customer', actor, `${b.reasonCode}`);   // a second branch returning while the case already waits adds a request, not a transition
+    const id = (await tx.query(`INSERT INTO info_request (institution_id, case_id, reason_code, customer_text, items, due_at, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+      [inst, caseId, b.reasonCode, customerText, JSON.stringify(items), b.dueAt ?? null, actor.id])).rows[0].id as string;
+    await this.audit.record(tx, { institutionId: inst, actorId: actor.id, actorType: actor.type, action: 'case.info_requested', objectType: 'app_case', objectId: caseId, reason: b.reasonCode, detail: { items: items.length } });
+    return { requestId: id };
+  }
+
+  /** Staff route for cases that have no workflow (Phase 3 behaviour). With a workflow, returning a case is a task outcome so it is tied to the task, the SLA pause and the TAT events. */
+  async requestInfo(p: Principal, caseId: string, b: { reasonCode?: string; customerText?: string; items?: Item[]; dueAt?: string }) {
     return this.db.withTenant(p.institutionId, async (tx) => {
       const c = await this.staffCase(tx, p, caseId, 'case.review');
-      const form = c.form_version_id ? await this.forms.pinned(p.institutionId, c.form_version_id) : null;
-      for (const i of items) {                          // targets must exist in the pinned form
-        const exists = i.type === 'question' || !!form?.def.fields.some((f) => (i.type === 'field' ? f.key === i.key : f.type === 'file' && f.documentKey === i.key));
-        if (!exists) throw new BadRequestException(`unknown target ${i.key}`);
-      }
-      await this.transition(tx, p.institutionId, caseId, 'returned_to_customer', { id: p.userId, type: p.actorType }, `${b.reasonCode}`);
-      const id = (await tx.query(`INSERT INTO info_request (institution_id, case_id, reason_code, customer_text, items, due_at, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-        [p.institutionId, caseId, b.reasonCode, customerText, JSON.stringify(items), b.dueAt ?? null, p.userId])).rows[0].id;
-      await this.audit.record(tx, { institutionId: p.institutionId, actorId: p.userId, actorType: p.actorType, action: 'case.info_requested', objectType: 'app_case', objectId: caseId, reason: b.reasonCode, detail: { items: items.length } });
-      return { requestId: id };
+      if (c.workflow_version_id) throw new ConflictException('use_task');
+      return this.requestInformation(tx, p.institutionId, { id: p.userId, type: p.actorType }, caseId, b);
     });
+  }
+
+  // ---------- read access for the workflow engine (same module family, same transaction) ----------
+  async contextOf(tx: Tx, caseId: string): Promise<(CaseContext & { state: CaseState; workflowVersionId: string | null }) | null> {
+    const c = (await tx.query('SELECT * FROM app_case WHERE id=$1', [caseId])).rows[0];
+    return c ? { caseId: c.id, institutionId: c.institution_id, serviceKey: c.service_key, serviceVersionId: c.service_version_id, branchId: c.branch_id, profileId: c.profile_id, formVersionId: c.form_version_id, state: c.internal_state, workflowVersionId: c.workflow_version_id, trackingCode: c.tracking_code } : null;
+  }
+  async attachWorkflow(tx: Tx, caseId: string, workflowVersionId: string) { await tx.query('UPDATE app_case SET workflow_version_id=$2 WHERE id=$1 AND workflow_version_id IS NULL', [caseId, workflowVersionId]); }
+  async latestData(tx: Tx, caseId: string): Promise<Record<string, unknown>> {
+    const r = (await tx.query('SELECT data_enc FROM application_snapshot WHERE case_id=$1 ORDER BY version DESC LIMIT 1', [caseId])).rows[0];
+    return r ? JSON.parse(decryptField(r.data_enc)) : {};
+  }
+  /** The customer's identity id, used for the "applicant cannot approve their own application" check (APR-01). */
+  async applicantUserId(tx: Tx, profileId: string): Promise<string | null> { return this.profiles.userIdOfProfile(tx, profileId); }
+  /** Case ids of a case's pinned scope for staff checks. */
+  async branchOf(tx: Tx, caseId: string): Promise<string | null> { return (await tx.query('SELECT branch_id FROM app_case WHERE id=$1', [caseId])).rows[0]?.branch_id ?? null; }
+
+  /** What the customer may see of the journey: generic wording keys and times only. No actors, reasons, task names or notes (STS-02, RET-03). */
+  async customerTimeline(s: SessionInfo, caseId: string) {
+    const inst = s.principal.institutionId; const profileId = await this.profiles.profileIdOf(s);
+    const c = await this.ownedCase(inst, profileId, caseId);
+    const rows = await this.db.withTenant(inst, async (tx) => (await tx.query('SELECT from_state, to_state, occurred_at FROM case_transition WHERE case_id=$1 ORDER BY seq', [caseId])).rows);
+    const MAP: Record<string, string> = { submitted: 'received', in_review: 'under_review', returned_to_customer: 'more_info_needed', resubmitted: 'corrections_received', approved: 'decision_made', declined: 'decision_made' };
+    const out: Array<{ key: string; at: string }> = [];
+    for (const r of rows) {
+      const key = MAP[r.to_state as string]; if (!key) continue;
+      if (out.at(-1)?.key === key) continue;                                   // generic keys collapse repeats
+      if (key === 'under_review' && r.from_state === 'submitted' && out.at(-1)?.key === 'received') { out.push({ key, at: r.occurred_at }); continue; }
+      out.push({ key, at: r.occurred_at });
+    }
+    return { caseId, trackingCode: c.tracking_code, status: CUSTOMER_STATUS[c.internal_state as CaseState], timeline: out };
   }
 
   /** SUB-01: the tracking code is only a locator. The public answer is identical for real and invented codes. */

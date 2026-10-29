@@ -1,0 +1,15 @@
+# ADR-027 — Workflow engine: build a small purpose-built engine (resolves ADR-018 for Phase 4)
+**Status:** Accepted for Phase 4, **pending review by the tech lead**; revisit at Phase 6 or if the first bank mandates an engine
+**Date:** 2026-10-29
+**Context:** ADR-018 asked for an adopt-versus-build spike against the first real service. Needs: versioned definitions pinned per case (WFL-07), human tasks with queue, role and branch scoping, parallel fork and join, conditional paths, return-to-customer loops that pause SLA clocks, escalation, an append-only transition record, no-code authoring with publish blockers, deterministic tests, a small operational footprint inside a modular monolith (ADR-002).
+**What was actually done (be clear about its limits):** the engine was built against the Phase 3 vertical slice (intake review, parallel clearance and document check, approval, return loop) and exercised by 70-plus automated tests. Alternatives were assessed on paper against the criteria above; **no BPMN engine or state-machine library was installed and trialled hands-on in this phase.**
+**Options and assessment:**
+| Option | For | Against |
+|---|---|---|
+| Server BPMN engine (separate Java process, e.g. Camunda family) | rich modelling, timers, mature | second runtime to host, secure, patch and back up inside a bank; process definitions would still need our own maker-checker, pinning, branch scoping, authority checks and customer-status mapping; licence terms vary; designers need BPMN knowledge |
+| Embedded state-machine library (e.g. XState) | small, MIT, testable | models machines in memory; persistence, human tasks, queues, SLA and versioned definitions would all be ours anyway |
+| **Purpose-built engine over a versioned graph (chosen)** | fits the data model and the rules exactly (every transition goes through one function, guarded in the database); easy to publish-check (reachability, clearances); no new runtime | we own correctness; limited node set; no timers or message correlation yet |
+**Decision:** build a small engine: node types `task`, `parallel` (fork with join), `approval`, `end`; definitions are a configuration kind (`workflow`) with a publish regression pack; instances pin the definition version; all state changes go through the case transition function (database-guarded) and write a transition record, an audit event and TAT events. Timers are not built: escalation of overdue work runs when an integration identity calls the due-escalation endpoint (a scheduler is operations work).
+**Consequences:** we carry the maintenance. The node set is deliberately small (no loops other than return-to-customer, no timers, no sub-workflows, no external waits until Phase 5 adds hand-off). The definition format is JSON so it can be generated from or exported to a BPMN subset later. If the bank requires an external engine, the adapter point is `WorkflowEngine` and the transition record stays the source of truth.
+**Alternatives rejected:** adopting an engine only because it exists; building a general-purpose engine.
+**Verification:** `core/test/workflow.e2e.spec.ts`, `core/src/workflow/*.spec.ts`.

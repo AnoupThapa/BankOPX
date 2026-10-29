@@ -50,12 +50,12 @@ describe('case page (RET-02, RET-03)', () => {
       documents: [], versions: [{ version: 1, kind: 'submission', at: '2030-01-01T00:00:00Z' }, { version: 2, kind: 'resubmission', at: '2030-01-02T00:00:00Z' }],
       form: { versionId: 'f', version: 1, definition: { fields: [{ key: 'full_name', type: 'text', label: { en: 'Full name', ne: 'पूरा नाम' }, required: true }] } }, data: { full_name: 'Asha' },
     };
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(detail), { status: 200 })));
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => new Response(JSON.stringify(String(url).endsWith('/timeline') ? { timeline: [{ key: 'received', at: '2030-01-01T00:00:00Z' }, { key: 'more_info_needed', at: '2030-01-01T01:00:00Z' }] } : detail), { status: 200 })));
     for (const locale of ['en', 'ne'] as const) {
       const { unmount } = render(<LocaleProvider locale={locale} extra={EXTRA}><CaseView caseId="c1" back={() => undefined} /></LocaleProvider>);
       await screen.findByRole('heading', { name: 'BB-AAAAA-BBBBB' });
       expect(screen.getByText('Fix your name')).toBeInTheDocument(); expect(screen.getByText('Your name does not match.')).toBeInTheDocument();
-      expect(screen.getAllByRole('listitem').length).toBeGreaterThanOrEqual(3);
+      expect(screen.getAllByRole('listitem').length).toBeGreaterThanOrEqual(5);        // items to fix, progress, submissions
       unmount();
     }
   });

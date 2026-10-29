@@ -90,13 +90,22 @@ describe('database integrity', () => {
     expect(r.rows[0].data_type).toBe('timestamp with time zone');
   });
 
+  it('TAT-02: every TAT event, task and notification timestamp is timestamptz (stored in UTC)', async () => {
+    const r = await owner.query(`SELECT table_name, column_name, data_type FROM information_schema.columns
+      WHERE table_schema='public' AND table_name IN ('tat_event','case_task','approval','notification')
+        AND (column_name LIKE '%\\_at' OR column_name='occurred_at')`);
+    expect(r.rows.length).toBeGreaterThan(5);
+    for (const row of r.rows) expect(row.data_type).toBe('timestamp with time zone');
+  });
+
   it('migrations are reversible and re-appliable (scratch database, isolated from other suites)', async () => {
     const name = `bbjp_mig_${Date.now()}`;
     await owner.query(`CREATE DATABASE ${name}`);
     const url = process.env.MIGRATION_DATABASE_URL!.replace(/\/[^/]+$/, `/${name}`);
     try {
-      const all = ['0001_foundation', '0002_customer', '0003_forms_cases_documents'];
+      const all = ['0001_foundation', '0002_customer', '0003_forms_cases_documents', '0004_workflow'];
       expect(await migrate(url, 'up')).toEqual(all);
+      expect(await migrate(url, 'down')).toEqual(['0004_workflow']);
       expect(await migrate(url, 'down')).toEqual(['0003_forms_cases_documents']);
       expect(await migrate(url, 'down')).toEqual(['0002_customer']);
       expect(await migrate(url, 'down')).toEqual(['0001_foundation']);

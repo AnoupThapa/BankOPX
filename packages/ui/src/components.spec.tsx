@@ -81,3 +81,19 @@ describe('design system', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Invalid');
   });
 });
+
+describe('timeline and decision status (STS-01, STS-02)', () => {
+  it('renders generic wording in both languages and drops any key outside the controlled set', async () => {
+    const { Timeline } = await import('./components');
+    for (const [locale, expected] of [['en', 'We received your application'], ['ne', 'हामीले तपाईंको आवेदन प्राप्त गर्‍यौं']] as const) {
+      const { unmount } = wrap(<Timeline items={[{ key: 'received', at: '2030-01-01T00:00:00Z' }, { key: 'fraud_review', at: '2030-01-02T00:00:00Z' }, { key: 'decision_made', at: '2030-01-03T00:00:00Z' }]} />, locale);
+      expect(screen.getByText(expected)).toBeInTheDocument();
+      expect(screen.queryByText(/fraud/i)).toBeNull(); expect(screen.getAllByRole('listitem')).toHaveLength(2);
+      unmount();
+    }
+  });
+  it('the decision status badge has text and an icon', () => {
+    wrap(<StatusBadge status="decision_made" />);
+    expect(screen.getByText('A decision has been made')).toBeInTheDocument();
+  });
+});

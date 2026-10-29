@@ -26,6 +26,10 @@ export const EXTRA: Record<Locale, Messages> = {
     'cases.title': 'My applications', 'cases.empty': 'You have not submitted any applications yet.', 'cases.open': 'Open', 'case.request.title': 'What we need from you', 'case.request.items': 'Please fix:',
     'case.respond': 'Send my corrections', 'case.responded': 'Thank you. We have your corrections and will review them again.', 'case.history': 'Your submissions', 'case.version': 'Version',
     'case.docs': 'Your answers and documents', 'case.fixdoc': 'Replace this document above.', 'case.submission': 'Submitted', 'case.resubmission': 'Corrected',
+    'nav.notifications': 'Notifications', 'notif.title': 'Notifications', 'notif.empty': 'You have no notifications.', 'notif.mark': 'Mark as read', 'notif.unread': 'unread', 'notif.open': 'Open application',
+    'notif.case_received': 'We received your application {code}. This is not an approval.', 'notif.more_info_needed': 'We need something from you for application {code}.',
+    'notif.corrections_received': 'We received your corrections for application {code}.', 'notif.decision_made': 'There is an update on application {code}.',
+    'case.decision': 'Decision', 'case.timeline': 'Progress',
     'common.back': 'Back', 'common.loading': 'Loading…', 'common.error': 'Something went wrong. Please try again.',
   },
   ne: {
@@ -52,6 +56,10 @@ export const EXTRA: Record<Locale, Messages> = {
     'cases.title': 'मेरा आवेदनहरू', 'cases.empty': 'तपाईंले अहिलेसम्म कुनै आवेदन बुझाउनुभएको छैन।', 'cases.open': 'खोल्नुहोस्', 'case.request.title': 'हामीलाई तपाईंबाट के चाहिन्छ', 'case.request.items': 'कृपया सच्याउनुहोस्:',
     'case.respond': 'मेरो सुधार पठाउनुहोस्', 'case.responded': 'धन्यवाद। हामीले तपाईंको सुधार पायौं र फेरि समीक्षा गर्नेछौं।', 'case.history': 'तपाईंका बुझाइहरू', 'case.version': 'संस्करण',
     'case.docs': 'तपाईंका उत्तर र कागजात', 'case.fixdoc': 'माथि यो कागजात बदल्नुहोस्।', 'case.submission': 'बुझाइएको', 'case.resubmission': 'सच्याइएको',
+    'nav.notifications': 'सूचनाहरू', 'notif.title': 'सूचनाहरू', 'notif.empty': 'तपाईंसँग कुनै सूचना छैन।', 'notif.mark': 'पढियो भनी चिन्ह लगाउनुहोस्', 'notif.unread': 'नपढिएको', 'notif.open': 'आवेदन खोल्नुहोस्',
+    'notif.case_received': 'हामीले तपाईंको आवेदन {code} प्राप्त गर्‍यौं। यो स्वीकृति होइन।', 'notif.more_info_needed': 'आवेदन {code} का लागि हामीलाई तपाईंबाट केही चाहिन्छ।',
+    'notif.corrections_received': 'आवेदन {code} का लागि तपाईंको सुधार प्राप्त भयो।', 'notif.decision_made': 'आवेदन {code} मा अद्यावधिक छ।',
+    'case.decision': 'निर्णय', 'case.timeline': 'प्रगति',
     'common.back': 'पछाडि', 'common.loading': 'लोड हुँदैछ…', 'common.error': 'केही गडबड भयो। कृपया फेरि प्रयास गर्नुहोस्।',
   },
 };

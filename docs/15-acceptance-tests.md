@@ -283,6 +283,54 @@ Scenario: No automatic final decision exists   # [DEC-01, DEC-06, AIX-01]
   Then the case still requires a recorded human decision
 ```
 
+### F.2 Phase 4 additions (workflow, staff work, decisions, tracking)
+
+```gherkin
+Scenario: A workflow cannot be published if it can skip a mandatory clearance   # [WFL-02, CFG-03, CFG-07]
+  Given a workflow where Approval is reachable without passing a node marked as a mandatory clearance
+  Or has a dead end, an unreachable node, an approval with no authority binding, or a task with no customer-status mapping
+  When the checker approves it
+  Then publication is blocked with the rule id
+
+Scenario: A case follows the workflow version it started on   # [WFL-07]
+  Given a case started on workflow v1
+  When v2 is published
+  Then the case continues on v1
+
+Scenario: Staff see only the work they are entitled to, and claim, assign and delegate it   # [QUE-01, QUE-02, SEC-12, APR-04]
+  Then a task appears in the queue only for staff holding its required permission in the case's branch
+  And claiming, assigning and reassigning are checked per task and audited
+  And a live delegation makes the delegate eligible, and an expired one does not
+
+Scenario: Parallel reviews join before approval   # [WFL-01, WFL-02]
+  Given a fork into compliance clearance and document check
+  Then approval does not open until both are completed
+  And a return to the customer by one branch pauses only that branch
+
+Scenario: Only an authorised human decides, and the decision is recorded completely   # [APR-01, APR-02, APR-03, APR-09, DEC-02, DEC-06]
+  Then the decision panel shows the authority check before the action is possible
+  And an approver above their limit, in another branch, or who also reviewed the case (where configured) is refused and the attempt is audited
+  And an approve or decline stores decision-maker, authority basis, time, rationale and workflow version
+  And nothing in the system approves or declines by itself
+
+Scenario: The customer sees a safe status and timeline, never internal detail   # [STS-01, STS-02, DEC-04]
+  Then the customer sees the controlled status, a timeline with generic wording, and, after a decision, only the bank-approved message
+  And never staff notes, task names, assignees, rationale or clearance results
+
+Scenario: Duplicate and retried staff actions do not duplicate effects   # [WFL-08, FRM-10]
+  When the same task completion is sent twice with one idempotency key
+  Then one decision and one transition exist
+
+Scenario: TAT separates customer wait from bank time and pauses the SLA   # [TAT-01, TAT-03, TAT-04, TAT-05]
+  Then durations come from the append-only event history
+  And a request to the customer pauses the SLA clock until the response is received
+  And dashboards show median and p90, with customer wait never merged into bank time
+
+Scenario: Overdue work escalates   # [APR-05, WFL-08]
+  When a task passes its due time and its stage has an escalation path
+  Then it is reassigned to the escalation permission and audited, once
+```
+
 ## G. Audit and TAT
 
 ```gherkin

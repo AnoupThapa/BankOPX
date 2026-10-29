@@ -18,6 +18,7 @@ import { CoreBankingPort, OtpDelivery } from '../src/customer-profile';
 import { migrate } from '../src/platform/migrate';
 import { AppLogger } from '../src/platform';
 import { EicarTestScanner, MalwareScanner } from '../src/document-evidence';
+import { REFERENCE_WORKFLOW } from '../src/workflow';
 import { LocalFsObjectStore, ObjectStore } from '../src/platform';
 import { mkdtempSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
@@ -53,7 +54,10 @@ async function main() {
     const seed = await seedInstitution([
       { name: 'secadmin1', actor: 'admin', role: 'security_admin', highRiskApproved: true }, { name: 'secadmin2', actor: 'admin', role: 'security_admin', highRiskApproved: true },
       { name: 'maker', actor: 'admin', role: 'config_maker' }, { name: 'checker', actor: 'admin', role: 'config_checker', highRiskApproved: true },
-      { name: 'officerA', actor: 'staff', role: 'branch_officer', branch: 'A' },
+      { name: 'officerA', actor: 'staff', role: 'branch_officer', branch: 'A' }, { name: 'officerA2', actor: 'staff', role: 'branch_officer', branch: 'A' },
+      { name: 'compliance', actor: 'staff', role: 'compliance_officer', branch: 'A' }, { name: 'lead', actor: 'staff', role: 'team_lead', branch: 'A' },
+      { name: 'approverSmall', actor: 'staff', role: 'approver', branch: 'A', maxAmount: 50000 }, { name: 'approverBig', actor: 'staff', role: 'approver', branch: 'A', maxAmount: 10_000_000 },
+      { name: 'sched', actor: 'integration', role: 'integration_service' },
     ], 'demo');
     // Synthetic staff logins for local walkthroughs and the browser test. Written to a file the developer controls; never used outside development.
     writeFileSync(process.env.DEV_SECRETS_FILE ?? join(tmpdir(), 'bbjp-dev-secrets.json'), JSON.stringify({ password: PASSWORD, institution: 'demo', totp: Object.fromEntries(Object.entries(seed.users).map(([k, u]) => [k, u.secret])) }));
@@ -70,13 +74,14 @@ async function main() {
       { key: 'income_proof', type: 'file', label: L('Proof of income (PDF or photo)', 'आम्दानीको प्रमाण (PDF वा फोटो)'), privacy: 'sensitive', documentKey: 'income_proof', accept: ['application/pdf', 'image/jpeg', 'image/png'] },
       { key: 'declaration', type: 'consent', label: L('I confirm these answers are true.', 'मेरा उत्तर सही छन् भनी पुष्टि गर्छु।'), required: true, privacy: 'internal' },
     ] });
+    await publish(maker, checker, 'workflow', 'loan-flow', REFERENCE_WORKFLOW());
     await publish(maker, checker, 'service', 'address-change', { ...base, formKey: 'address-change-form', requiresExistingRelationship: false, remoteClass: 'remote_capable', documents: ['A photo of your ID'],
       title: loc('Change of address', 'ठेगाना परिवर्तन'), description: loc('Tell us your new address.', 'आफ्नो नयाँ ठेगाना जनाउनुहोस्।'),
       whoCanApply: loc('Account holders.', 'खातावाला।'), fees: loc('No fee (demo)', 'शुल्क छैन (डेमो)'), supportChannel: loc('Call 1660-00-00000 (demo)', 'फोन 1660-00-00000 (डेमो)') });
     await publish(maker, checker, 'service', 'account-certificate', { ...base, requiresExistingRelationship: false, remoteClass: 'remote_capable',
       title: loc('Account certificate', 'खाता प्रमाणपत्र'), description: loc('Request a certificate confirming your account.', 'आफ्नो खाता पुष्टि गर्ने प्रमाणपत्र अनुरोध गर्नुहोस्।'),
       whoCanApply: loc('Anyone who holds an account with the bank.', 'बैंकमा खाता भएका जो कोही।'), fees: loc('No fee (demo)', 'शुल्क छैन (डेमो)'), supportChannel: loc('Call 1660-00-00000 (demo)', 'फोन 1660-00-00000 (डेमो)') });
-    await publish(maker, checker, 'service', 'personal-loan-enquiry', { ...base, formKey: 'loan-enquiry-form', requiresExistingRelationship: true, remoteClass: 'remote_first_conditional',
+    await publish(maker, checker, 'service', 'personal-loan-enquiry', { ...base, formKey: 'loan-enquiry-form', workflowKey: 'loan-flow', requiresExistingRelationship: true, remoteClass: 'remote_first_conditional',
       title: loc('Personal loan enquiry', 'व्यक्तिगत ऋण जिज्ञासा'), description: loc('Start a loan enquiry. A person reviews it; submitting is not an approval.', 'ऋण जिज्ञासा सुरु गर्नुहोस्। व्यक्तिले समीक्षा गर्छन्।'),
       whoCanApply: loc('Existing customers with a linked relationship.', 'जोडिएको सम्बन्ध भएका वर्तमान ग्राहक।'), fees: loc('Fees shown at offer stage (demo)', 'प्रस्ताव चरणमा शुल्क देखाइन्छ (डेमो)'),
       supportChannel: loc('Visit any branch (demo)', 'कुनै पनि शाखामा जानुहोस् (डेमो)'),

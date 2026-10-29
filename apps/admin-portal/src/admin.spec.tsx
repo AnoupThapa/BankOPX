@@ -13,7 +13,7 @@ describe('form designer (CFG-03, FRM-06, SVC-07)', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('every t(...) key used in the admin source exists', () => {
-    const src = ['App.tsx', 'designer.tsx', 'review.tsx'].map((f) => readFileSync(join(process.cwd(), 'src', f), 'utf8')).join('\n');
+    const src = ['App.tsx', 'designer.tsx', 'review.tsx', 'workflow-designer.tsx'].map((f) => readFileSync(join(process.cwd(), 'src', f), 'utf8')).join('\n');
     const keys = [...src.matchAll(/\bt\('([a-z_.]+)'\)/g)].map((m) => m[1]!);
     const shared = ['status.', 'priority.', 'internal.', 'field.', 'button.', 'form.'];
     for (const k of keys) expect(k in EXTRA.en || shared.some((p) => k.startsWith(p))).toBe(true);
@@ -78,3 +78,22 @@ describe('form designer (CFG-03, FRM-06, SVC-07)', () => {
 });
 
 import { within } from '@testing-library/react';
+
+import { outline } from './workflow-designer';
+describe('workflow designer outline', () => {
+  it('shows the path a case takes: the fork, the mandatory clearance and the approval ends, without drawing tools', () => {
+    const wf = { start: 'a', nodes: {
+      a: { type: 'task', title: { en: 'Screening' }, permission: 'case.review', outcomes: { complete: 'f' } },
+      f: { type: 'parallel', title: { en: 'Checks' }, branches: ['c', 'd'], join: 'ap' },
+      c: { type: 'task', title: { en: 'Compliance' }, permission: 'case.clear', clearance: 'compliance' }, d: { type: 'task', title: { en: 'Docs' }, permission: 'case.review' },
+      ap: { type: 'approval', title: { en: 'Approval' }, permission: 'case.approve', outcomes: { approve: 'ok', decline: 'no' } },
+      ok: { type: 'end', outcome: 'approved' }, no: { type: 'end', outcome: 'declined' } } };
+    const text = outline(wf).join('\n');
+    expect(text).toContain('Screening (a)'); expect(text).toContain('all of c + d must finish'); expect(text).toContain('[mandatory clearance: compliance]');
+    expect(text).toContain('End: approved'); expect(text).toContain('End: declined');
+  });
+  it('is empty for anything that is not a workflow, and never loops on a cyclic definition', () => {
+    expect(outline(null)).toEqual([]); expect(outline({ start: 'x', nodes: {} })).toEqual([]);
+    expect(outline({ start: 'a', nodes: { a: { type: 'task', outcomes: { complete: 'a' } } } }).length).toBe(1);
+  });
+});

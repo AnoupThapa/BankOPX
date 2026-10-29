@@ -20,9 +20,9 @@ export function TextField({ label, hint, error, required, ...p }: FieldProps) {
   );
 }
 
-export type CustomerStatus = 'received' | 'under_review' | 'more_info_needed' | 'completed';
+export type CustomerStatus = 'received' | 'under_review' | 'more_info_needed' | 'completed' | 'decision_made';
 const TONE: Record<CustomerStatus, { tone: string; icon: string }> = {
-  received: { tone: 'info', icon: '●' }, under_review: { tone: 'info', icon: '○' }, more_info_needed: { tone: 'warn', icon: '!' }, completed: { tone: 'ok', icon: '✓' },
+  received: { tone: 'info', icon: '●' }, under_review: { tone: 'info', icon: '○' }, more_info_needed: { tone: 'warn', icon: '!' }, completed: { tone: 'ok', icon: '✓' }, decision_made: { tone: 'info', icon: '◆' },
 };
 /** Generic label chip: text plus icon, never colour alone. Not for case status (use StatusBadge, whose values are a controlled dictionary). */
 export function Tag({ tone = 'info', icon, children }: { tone?: 'ok' | 'warn' | 'danger' | 'info'; icon: string; children: ReactNode }) {
@@ -45,5 +45,18 @@ export function PriorityTag({ level, reason }: { level: 'high' | 'normal'; reaso
 /** RET-03: internal notes are visually and textually distinct from customer-facing text. */
 export function InternalNote({ children }: { children: ReactNode }) {
   const t = useT();
-  return <aside className="bbjp-internal" aria-label={t('internal.banner')}><strong>{t('internal.banner')}</strong><div>{children}</div></aside>;
+  return <div role="note" className="bbjp-internal" aria-label={t('internal.banner')}><strong>{t('internal.banner')}</strong><div>{children}</div></div>;
+}
+
+/** Customer journey: generic wording only, in the order it happened (STS-01, STS-02). Unknown keys are not rendered, so internal terms can never leak through this component. */
+export function Timeline({ items }: { items: Array<{ key: string; at: string }> }) {
+  const t = useT();
+  const known = new Set(['received', 'under_review', 'more_info_needed', 'corrections_received', 'decision_made']);
+  return (
+    <ol className="bbjp-timeline">
+      {items.filter((i) => known.has(i.key)).map((i, n) => (
+        <li key={`${i.key}-${n}`}><strong>{t(`timeline.${i.key}`)}</strong> <time dateTime={i.at}>{new Date(i.at).toLocaleString()}</time></li>
+      ))}
+    </ol>
+  );
 }

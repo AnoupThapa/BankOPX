@@ -11,6 +11,8 @@ const en: Messages = {
   'designer.preview': 'Preview', 'designer.phone': 'Phone', 'designer.desktop': 'Desktop', 'designer.validate': 'Check for publish blockers', 'designer.valid': 'No blockers. This form can be submitted for review.', 'designer.blockers': 'Publish blockers',
   'designer.reason': 'Reason for this change', 'designer.save': 'Save and submit for review', 'designer.saved': 'Submitted for review. A different person must approve it before it goes live.', 'designer.json': 'Advanced: edit as JSON (groups and calculated fields)',
   'designer.jsonerr': 'This is not valid JSON.', 'designer.groupnote': 'Groups and calculated fields are edited in the advanced JSON box.',
+  'nav.workflow': 'Workflow designer', 'wf.title': 'Workflow designer', 'wf.key': 'Workflow key', 'wf.keyhint': 'Services refer to this key.', 'wf.json': 'Workflow definition (JSON)', 'wf.template': 'Start from the reference workflow',
+  'wf.outline': 'Paths', 'wf.outline.empty': 'Nothing to show yet.', 'wf.jsonerr': 'This is not valid JSON.',
   'review.title': 'Waiting for review', 'review.empty': 'Nothing is waiting for review.', 'review.changes': 'Changes against the live version', 'review.new': 'New (no live version yet)', 'review.same': 'No difference from the live version.', 'review.blockers': 'Publish blockers', 'review.approve': 'Approve and publish',
   'review.reject': 'Send back', 'review.reason': 'Reason', 'review.done': 'Done.', 'review.own': 'You made this change, so someone else must approve it.', 'review.version': 'version', 'review.by': 'Reason given by the maker',
   'common.loading': 'Loading…', 'common.error': 'Something went wrong. Please try again.',

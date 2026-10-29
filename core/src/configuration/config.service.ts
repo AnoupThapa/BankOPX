@@ -131,8 +131,9 @@ export class ConfigService {
   }
 
   /** Runtime read used by other modules: the published, not-disabled version, or null. */
-  async getPublished(institutionId: string, kind: string, key: string): Promise<(VersionView & { content: Record<string, unknown> }) | null> {
-    return this.db.withTenant(institutionId, async (tx) => {
+  async getPublished(institutionId: string, kind: string, key: string, outer?: Tx): Promise<(VersionView & { content: Record<string, unknown> }) | null> {
+    const run = <T>(fn: (tx: Tx) => Promise<T>) => (outer ? fn(outer) : this.db.withTenant(institutionId, fn));   // pass the caller's transaction when it has one: a second connection per request can exhaust the pool
+    return run(async (tx) => {
       const r = (await tx.query(
         `SELECT v.* FROM config_version v JOIN config_definition d ON d.id=v.definition_id
          WHERE d.kind=$1 AND d.key=$2 AND d.disabled=false AND v.status='published' AND (v.effective_from IS NULL OR v.effective_from <= now())`, [kind, key])).rows[0];
@@ -164,9 +165,10 @@ export class ConfigService {
    * Content of a version that cases and drafts have pinned. Published or retired versions only; drafts and in-review versions are never
    * served to runtime callers (FRM-03, WFL-07). A retired version stays readable so in-flight work keeps its rules.
    */
-  async getPinnedVersion(institutionId: string, kind: string, id: string): Promise<{ id: string; key: string; version: number; contentHash: string; content: Record<string, unknown> } | null> {
+  async getPinnedVersion(institutionId: string, kind: string, id: string, outer?: Tx): Promise<{ id: string; key: string; version: number; contentHash: string; content: Record<string, unknown> } | null> {
     if (!/^[0-9a-f-]{36}$/.test(String(id))) return null;
-    return this.db.withTenant(institutionId, async (tx) => {
+    const run = <T>(fn: (tx: Tx) => Promise<T>) => (outer ? fn(outer) : this.db.withTenant(institutionId, fn));
+    return run(async (tx) => {
       const r = (await tx.query(
         `SELECT v.id, d.key, v.version, v.content_hash, v.content FROM config_version v JOIN config_definition d ON d.id=v.definition_id
          WHERE v.id=$1 AND d.kind=$2 AND v.status IN ('published','retired')`, [id, kind])).rows[0];

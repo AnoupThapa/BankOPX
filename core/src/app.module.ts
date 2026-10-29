@@ -8,11 +8,14 @@ import { PlatformModule } from './platform';
 import { CustomerProfileModule } from './customer-profile';
 import { ServiceCatalogueModule } from './service-catalogue';
 import { CaseModule } from './case';
+import { NotificationModule } from './notification';
+import { TatSlaModule } from './tat-sla';
+import { WorkflowModule } from './workflow';
 import { DocumentEvidenceModule } from './document-evidence';
 import { FormsModule } from './forms';
 
 @Module({
-  imports: [PlatformModule, AuditModule, IdentityAccessModule, ConfigurationModule, CustomerProfileModule, ServiceCatalogueModule, FormsModule, DocumentEvidenceModule, CaseModule],
+  imports: [PlatformModule, AuditModule, IdentityAccessModule, ConfigurationModule, CustomerProfileModule, ServiceCatalogueModule, FormsModule, DocumentEvidenceModule, CaseModule, TatSlaModule, NotificationModule, WorkflowModule],
   controllers: [HealthController, AuditController],
 })
 export class AppModule {}

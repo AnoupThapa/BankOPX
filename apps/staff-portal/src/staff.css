@@ -1,0 +1,21 @@
+.staff { max-width: 1280px; margin: 0 auto; padding: var(--bbjp-space-3); }
+.staff header { display: flex; flex-wrap: wrap; gap: var(--bbjp-space-2); align-items: center; justify-content: space-between; }
+.staff nav, .staff .actions, .staff .filters { display: flex; flex-wrap: wrap; gap: var(--bbjp-space-2); align-items: end; }
+.staff h1 { font-size: 1.5rem; } .staff h2 { font-size: 1.15rem; margin-top: var(--bbjp-space-4); } .staff h3 { font-size: 1rem; }
+.staff .status { padding: var(--bbjp-space-2) var(--bbjp-space-3); border-left: 6px solid var(--bbjp-primary); background: var(--bbjp-surface); margin-block: var(--bbjp-space-3); }
+.staff .card { border: 2px solid var(--bbjp-border); border-radius: var(--bbjp-radius); padding: var(--bbjp-space-3); margin-block: var(--bbjp-space-3); }
+.staff .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
+.staff .hint { color: var(--bbjp-muted); font-size: .875rem; }
+.table-wrap { overflow-x: auto; }
+.staff table { border-collapse: collapse; width: 100%; }
+.staff th, .staff td { text-align: left; vertical-align: top; padding: var(--bbjp-space-2); border-bottom: 1px solid var(--bbjp-border); }
+.staff thead th { border-bottom: 2px solid var(--bbjp-border); }
+.ws-grid { display: grid; grid-template-columns: 1fr; gap: var(--bbjp-space-4); }
+@media (min-width: 1000px) { .ws-grid { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); } }
+.staff dl { display: grid; gap: var(--bbjp-space-1); } .staff dt { font-weight: 600; } .staff dd { margin: 0 0 var(--bbjp-space-2); overflow-wrap: anywhere; }
+.staff .changed { background: var(--bbjp-surface); border-left: 4px solid var(--bbjp-warn); padding-left: var(--bbjp-space-2); }
+.staff .checks { list-style: none; padding: 0; } .staff .checks li { padding: var(--bbjp-space-1) 0; }
+.staff .docs, .staff .history { padding-left: var(--bbjp-space-3); } .staff .docs li { margin-block: var(--bbjp-space-3); }
+.staff .review { margin-top: var(--bbjp-space-2); }
+.staff .item-row { border-top: 1px solid var(--bbjp-border); padding-top: var(--bbjp-space-2); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

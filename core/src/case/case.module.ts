@@ -12,5 +12,6 @@ import { CaseService } from './case.service';
   imports: [AuditModule, IdentityAccessModule, CustomerProfileModule, DocumentEvidenceModule, FormsModule, ServiceCatalogueModule],
   controllers: [CaseController, StaffCaseController, TrackController],
   providers: [CaseService],
+  exports: [CaseService],
 })
 export class CaseModule {}
