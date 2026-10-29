@@ -42,3 +42,14 @@ export const CREDIT_REVIEW_WORKFLOW = (): WorkflowDef => ({
     declined_end: { type: 'end', outcome: 'declined', customerMessage: L('A decision has been made on your application. Please sign in to read it.') },
   },
 });
+
+/** One review step, then an approval that is blocked until the listed gates hold (collateral in order, trade documents complete). SLA hours are placeholders [BANK-DECIDES]. */
+export const GATED_REVIEW_WORKFLOW = (gates: Array<'valuation_current_and_ok' | 'no_open_margin_call' | 'trade_documents_complete'>): WorkflowDef => ({
+  start: 'review',
+  nodes: {
+    review: { type: 'task', title: L('Review'), permission: 'case.review', queue: 'review', customerStatus: 'under_review', sla: sla(48), canReturn: true, outcomes: { complete: 'approval' } },
+    approval: { type: 'approval', title: L('Approval'), permission: 'case.approve', queue: 'approval', customerStatus: 'under_review', sla: sla(72), amountField: 'amount', separateFrom: ['review'], gates, outcomes: { approve: 'approved_end', decline: 'declined_end' } },
+    approved_end: { type: 'end', outcome: 'approved', customerMessage: L('A decision has been made on your application. Please sign in to continue.') },
+    declined_end: { type: 'end', outcome: 'declined', customerMessage: L('A decision has been made on your application. Please sign in to read it.') },
+  },
+});

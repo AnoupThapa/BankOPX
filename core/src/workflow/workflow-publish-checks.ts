@@ -1,6 +1,6 @@
 import { ConfigValidator } from '../configuration';
 import { parseDec } from '../platform';
-import { ApprovalNode, Node, ParallelNode, TASK_PERMISSIONS, TaskNode, WorkflowDef } from './workflow-schema';
+import { APPROVAL_GATES, ApprovalNode, Node, ParallelNode, TASK_PERMISSIONS, TaskNode, WorkflowDef } from './workflow-schema';
 
 const KEY = /^[a-z][a-z0-9_]{0,40}$/;
 const loc = (v: unknown): boolean => !!v && typeof v === 'object' && ['en', 'ne'].every((l) => typeof (v as Record<string, unknown>)[l] === 'string' && ((v as Record<string, string>)[l] ?? '').trim() !== '');
@@ -60,6 +60,7 @@ export const workflowValidator: ConfigValidator = (kind, c) => {
       if (!has(a.outcomes?.decline) || (nodes[a.outcomes.decline]!.type !== 'end') || (nodes[a.outcomes.decline] as { outcome?: string }).outcome !== 'declined') e.push(`WFL-08: approval '${key}' must lead to an end node with outcome 'declined'`);
       if (a.amountField !== undefined && !/^[a-z][a-z0-9_]{0,40}$/.test(a.amountField)) e.push(`APR-03: '${key}' amountField is invalid`);
       if (a.nonMonetary !== undefined && (a.nonMonetary !== true || a.amountField !== undefined)) e.push(`APR-03: '${key}' is either non-monetary or has an amountField, not both`);
+      if (a.gates !== undefined && (!Array.isArray(a.gates) || a.gates.some((g) => !(APPROVAL_GATES as readonly string[]).includes(g)) || new Set(a.gates).size !== a.gates.length)) e.push(`COL-03: '${key}' gates must be a list of distinct known gates (${APPROVAL_GATES.join(', ')})`);
       if (a.jointApproval !== undefined) {
         const j = a.jointApproval;
         if (!a.amountField) e.push(`APR-03: '${key}' joint approval needs an amountField`);

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button, InternalNote, StatusBadge, TextField, useT } from '@bbjp/ui';
+import { CollateralPanel } from './collateral';
 import { CreditPanel } from './credit';
+import { TradePanel } from './trade';
 import { api, ApiError, Eligibility, Workspace, WsTask } from './api';
 import { duration, when } from './format';
 
@@ -152,6 +154,8 @@ export function CaseWorkspace({ caseId, back }: { caseId: string; back: () => vo
         </div>
       </div>
       <CreditPanel caseId={caseId} />
+      <CollateralPanel caseId={caseId} />
+      <TradePanel caseId={caseId} />
     </section>
   );
 }

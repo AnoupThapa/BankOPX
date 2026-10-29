@@ -3,10 +3,12 @@ import { AuditService } from '../audit';
 import { CaseContext, CaseService } from '../case';
 import { ConfigService, ConfigValidatorRegistry } from '../configuration';
 import { AccessService, AuthService, decide, Principal, scopedBranchIds } from '../identity-access';
+import { CollateralService } from '../collateral';
 import { IntegrationService } from '../integration';
 import { NotificationService } from '../notification';
 import { Db, Idempotency, parseDec, Tx } from '../platform';
 import { TatEventInput, TatService } from '../tat-sla';
+import { TradeService } from '../trade';
 import { priorityOf } from './priority';
 import { ApprovalNode, EndNode, ParallelNode, TaskNode, WorkflowDef } from './workflow-schema';
 import { workflowValidator } from './workflow-publish-checks';
@@ -27,6 +29,7 @@ export class WorkflowService implements OnModuleInit {
   constructor(
     private readonly db: Db, private readonly audit: AuditService, private readonly access: AccessService, private readonly auth: AuthService, private readonly config: ConfigService,
     private readonly cases: CaseService, private readonly tat: TatService, private readonly notes: NotificationService, private readonly idem: Idempotency, private readonly validators: ConfigValidatorRegistry, private readonly integration: IntegrationService,
+    private readonly collateral: CollateralService, private readonly trade: TradeService,
   ) {}
 
   onModuleInit() {
@@ -146,6 +149,13 @@ export class WorkflowService implements OnModuleInit {
       // maker-checker (APR-02): people who completed the listed earlier stages may not decide.
       const prior = node.type === 'approval' && node.separateFrom?.length ? (await tx.query(`SELECT 1 FROM case_task WHERE case_id=$1 AND node_key = ANY($2::text[]) AND completed_by=$3 LIMIT 1`, [t.case_id, node.separateFrom, p.userId])).rowCount! > 0 : false;
       checks.push({ check: 'separate_from_earlier_stage', ok: !prior, detail: prior ? 'you worked an earlier stage of this case' : undefined });
+    }
+    if (node.type === 'approval') {
+      // Gates only block. A missing or stale valuation, an open margin call, or incomplete trade documents stop the approval from being recorded (COL-03, COL-04, TRD-01, TRD-02).
+      for (const g of node.gates ?? []) {
+        const r = g === 'trade_documents_complete' ? await this.trade.gate(tx, p.institutionId, t.case_id) : await this.collateral.gate(tx, p.institutionId, t.case_id, g);
+        checks.push({ check: `gate_${g}`, ok: r.ok, detail: r.ok ? undefined : r.detail });
+      }
     }
     let approvals: Eligibility['approvals'];
     if (node.type === 'approval' && node.jointApproval?.length) {

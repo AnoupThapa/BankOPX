@@ -30,7 +30,7 @@ async function axe(page, label) {
 const noOverflow = async (page, label) => check(`${label}: no horizontal scrolling`, !(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)));
 
 let lastPage; const pageErrors = [];
-process.on('uncaughtException', async (e) => { console.log('FAILED:', e.message.split('\n')[0]); console.log('page errors:', pageErrors.slice(0, 2)); try { console.log('--- page text ---\n' + (await lastPage.locator('body').innerText()).slice(0, 1500)); } catch { /* gone */ } process.exit(1); });
+process.on('uncaughtException', async (e) => { console.log('FAILED:', e.message.split('\n').slice(0, 3).join(' | ')); console.log('page errors:', pageErrors.slice(0, 2)); try { console.log('--- page text ---\n' + (await lastPage.locator('body').innerText()).slice(0, 1500)); } catch { /* gone */ } process.exit(1); });
 
 // ---- staff API helper for the steps that are not the point of this walkthrough ----
 async function staffApi(user) {
@@ -150,6 +150,7 @@ appr.on('pageerror', (e) => pageErrors.push(e.message));
 await staffLogin(appr, 'approverBig');
 await appr.getByRole('button', { name: `Open case ${code}` }).click();
 await appr.getByRole('heading', { name: 'Credit review' }).waitFor();
+await appr.getByText(/Repayment capacity is adequate/).first().waitFor(); await appr.getByText('90.0000', { exact: true }).first().waitFor();
 check('approver sees the recommendation, the system figures and the condition', (await appr.getByText(/Repayment capacity is adequate/).first().isVisible()) && (await appr.getByText('90.0000', { exact: true }).first().isVisible()) && (await appr.getByText(/Insurance with the bank as beneficiary/).first().isVisible()));
 check('approver cannot edit the credit file (no entry forms)', (await appr.getByRole('button', { name: 'Run calculations and score' }).count()) === 0 && (await appr.getByRole('button', { name: 'Record recommendation' }).count()) === 0);
 await appr.getByRole('radio', { name: 'Approve' }).check();

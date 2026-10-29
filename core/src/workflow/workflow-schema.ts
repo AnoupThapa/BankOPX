@@ -1,5 +1,6 @@
 // Workflow definition (docs/08 §3, ADR-027). Pure data; the engine and the publish checks both read it.
 export type Loc = { en: string; ne: string };
+export const APPROVAL_GATES = ['valuation_current_and_ok', 'no_open_margin_call', 'trade_documents_complete'] as const;
 export const TASK_PERMISSIONS = ['case.review', 'case.clear', 'case.approve'] as const;
 export type TaskPermission = (typeof TASK_PERMISSIONS)[number];
 export type CustomerStage = 'received' | 'under_review';
@@ -24,6 +25,11 @@ export interface ApprovalNode extends Common {
    * Joint approval (APR-03, docs/08): above each threshold this many different approvers must approve before the case moves on. Each of them must individually pass the
    * authority checks for the amount. One decline by an authorised approver ends it at once. Thresholds are decimal text. Needs amountField.
    */
+  /**
+   * Conditions that must hold before this approval can be recorded (shown as checks in the decision panel). They only block; they never decide. 'valuation_current_and_ok' and
+   * 'no_open_margin_call' read the collateral file (COL-03, COL-04); 'trade_documents_complete' reads the trade document file (TRD-01, TRD-02).
+   */
+  gates?: Array<'valuation_current_and_ok' | 'no_open_margin_call' | 'trade_documents_complete'>;
   jointApproval?: Array<{ aboveAmount: string; approvals: number }>;
   /** Nodes whose completers may not also decide (maker-checker, APR-02). */
   separateFrom?: string[];

@@ -34,6 +34,13 @@ export const serviceValidator: ConfigValidator = (kind, c) => {
         || (k.scorecardKey !== undefined && !key(k.scorecardKey)) || (k.externalChecks !== undefined && (!Array.isArray(k.externalChecks) || !k.externalChecks.every(key))) || (k.tenorField !== undefined && !key(k.tenorField)) || (k.purposeField !== undefined && !key(k.purposeField))
         || typeof k.currency !== 'string' || !/^[A-Z]{3}$/.test(k.currency)) e.push('CRD-07: credit needs productClass, checklistKey, calculationSetKey, amountField and a currency');
   }
+  for (const [name, fields] of [['collateral', ['productClass', 'securityListKey', 'policyKey', 'amountField']], ['trade', ['productClass', 'checklistKey']]] as const) {
+    const v = c[name] as Record<string, unknown> | undefined;
+    if (v !== undefined) {
+      const key = (x: unknown) => typeof x === 'string' && /^[a-z0-9_.-]{1,64}$/.test(x);
+      if (!v || typeof v !== 'object' || !fields.every((f) => key(v[f])) || (name === 'collateral' && (typeof v.currency !== 'string' || !/^[A-Z]{3}$/.test(v.currency)))) e.push(`CRD-07: ${name} needs ${fields.join(', ')}${name === 'collateral' ? ' and a currency' : ''}`);
+    }
+  }
   const a = c.availability as Record<string, unknown> | undefined;
   for (const k of ['channels', 'branches', 'currencies', 'segments']) if (!a || !isStringArray(a[k])) e.push(`SVC-06: availability.${k} must list values or ['*']`);
   return { ok: e.length === 0, errors: e };
