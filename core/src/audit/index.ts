@@ -1,2 +1,2 @@
-export { AuditService, AuditInput, computeAuditHash, GENESIS_HASH } from './audit.service';
+export { AuditService, AuditInput, computeAuditHash, canonicalJson, GENESIS_HASH } from './audit.service';
 export { AuditModule } from './audit.module';

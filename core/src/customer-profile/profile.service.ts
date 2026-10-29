@@ -86,6 +86,8 @@ export class ProfileService {
 
   // ---------- profile (PRF-01, PRF-02, PRF-03) ----------
   /** The profile id always comes from the session, never from the request: there is no id for a caller to tamper with (SEC-02). */
+  async profileIdOf(s: SessionInfo): Promise<string> { return this.profileId(s); }
+
   private async profileId(s: SessionInfo): Promise<string> {
     const r = await this.db.withTenant(s.principal.institutionId, async (tx) => (await tx.query('SELECT id FROM customer_profile WHERE user_id=$1', [s.principal.userId])).rows[0]);
     if (!r) throw new ForbiddenException('forbidden');
@@ -172,26 +174,43 @@ export class ProfileService {
     });
   }
 
-  // ---------- drafts (resume later, AT-VS-01) ----------
-  async saveDraft(s: SessionInfo, serviceKey: string, data: unknown) {
+  // ---------- drafts (resume later, FRM-02) ----------
+  /** Saves a draft. The form and service versions are pinned on first save and never change afterwards (FRM-03, WFL-07). */
+  async saveDraft(s: SessionInfo, serviceKey: string, data: unknown, pin?: { formVersionId: string | null; serviceVersionId: string | null }) {
     if (!/^[a-z0-9_.-]{1,64}$/.test(serviceKey)) throw new BadRequestException('invalid service');
     const json = JSON.stringify(data ?? {});
     if (json.length > 200_000) throw new BadRequestException('draft too large');
     const profileId = await this.profileId(s);
     await this.db.withTenant(s.principal.institutionId, async (tx) => {
       await tx.query(
-        `INSERT INTO customer_draft (institution_id, profile_id, service_key, data_enc) VALUES ($1,$2,$3,$4)
-         ON CONFLICT (profile_id, service_key) DO UPDATE SET data_enc=EXCLUDED.data_enc, updated_at=now()`, [s.principal.institutionId, profileId, serviceKey, encryptField(json)]);
+        `INSERT INTO customer_draft (institution_id, profile_id, service_key, data_enc, form_version_id, service_version_id) VALUES ($1,$2,$3,$4,$5,$6)
+         ON CONFLICT (profile_id, service_key) DO UPDATE SET data_enc=EXCLUDED.data_enc, updated_at=now()`,
+        [s.principal.institutionId, profileId, serviceKey, encryptField(json), pin?.formVersionId ?? null, pin?.serviceVersionId ?? null]);
     });
   }
 
   async getDraft(s: SessionInfo, serviceKey: string) {
     const profileId = await this.profileId(s);
     return this.db.withTenant(s.principal.institutionId, async (tx) => {
-      const r = (await tx.query('SELECT data_enc, updated_at FROM customer_draft WHERE profile_id=$1 AND service_key=$2', [profileId, serviceKey])).rows[0];
+      const r = (await tx.query('SELECT data_enc, updated_at, form_version_id, service_version_id FROM customer_draft WHERE profile_id=$1 AND service_key=$2', [profileId, serviceKey])).rows[0];
       if (!r) throw new NotFoundException();
-      return { data: JSON.parse(decryptField(r.data_enc)), updatedAt: r.updated_at };
+      return { data: JSON.parse(decryptField(r.data_enc)), updatedAt: r.updated_at, formVersionId: r.form_version_id as string | null, serviceVersionId: r.service_version_id as string | null };
     });
+  }
+
+  /** Reads the draft inside the caller's transaction; used when a submission consumes it. */
+  async takeDraft(tx: Tx, profileId: string, serviceKey: string) {
+    const r = (await tx.query('DELETE FROM customer_draft WHERE profile_id=$1 AND service_key=$2 RETURNING data_enc, form_version_id, service_version_id', [profileId, serviceKey])).rows[0];
+    return r ? { data: JSON.parse(decryptField(r.data_enc)) as unknown, formVersionId: r.form_version_id as string | null, serviceVersionId: r.service_version_id as string | null } : null;
+  }
+
+  /** Profile id for a customer identity, or null (staff and unknown users have none). Used by other modules instead of reading the table. */
+  async profileIdForUser(institutionId: string, userId: string): Promise<string | null> {
+    return this.db.withTenant(institutionId, async (tx) => (await tx.query('SELECT id FROM customer_profile WHERE user_id=$1', [userId])).rows[0]?.id ?? null);
+  }
+
+  async homeBranchOf(tx: Tx, profileId: string): Promise<string | null> {
+    return (await tx.query('SELECT home_branch_id FROM customer_profile WHERE id=$1', [profileId])).rows[0]?.home_branch_id ?? null;
   }
 
   async isLinked(institutionId: string, userId: string): Promise<boolean> {

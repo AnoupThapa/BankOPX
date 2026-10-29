@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Post, Query, Req } from '@nestjs/common';
 import { AuthedRequest, RequirePermission } from '../identity-access';
 import { ConfigService } from './config.service';
 
@@ -21,6 +21,10 @@ export class ConfigController {
   rollback(@Req() req: AuthedRequest, @Param('id') id: string, @Body() b: { toVersion: number; reason: string }) { return this.cfg.rollback(this.p(req), id, b.toVersion, b.reason); }
   @Post('definitions/:id/disable') @RequirePermission('config.disable')
   disable(@Req() req: AuthedRequest, @Param('id') id: string, @Body() b: { disabled: boolean; reason: string }) { return this.cfg.setDisabled(this.p(req), id, b.disabled, b.reason); }
+  @Get('review-queue') @RequirePermission('config.read')
+  queue(@Req() req: AuthedRequest, @Query('kind') kind?: string) { return this.cfg.reviewQueue(this.p(req), kind); }
+  @Post('validate') @RequirePermission('config.draft')
+  validate(@Req() req: AuthedRequest, @Body() b: { kind: string; content: Record<string, unknown> }) { return this.cfg.validateDraft(this.p(req), b.kind, b.content ?? {}); }
   @Get('versions/:id') @RequirePermission('config.read')
   get(@Req() req: AuthedRequest, @Param('id') id: string) { return this.cfg.getVersion(this.p(req), id); }
 }

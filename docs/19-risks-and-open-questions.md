@@ -68,6 +68,12 @@ Add questions as they arise (Q21+). Close a question by recording the decision, 
 | A-010 | 2026-10-29 | Linking requires a fresh OTP step-up plus an authoritative-record match on bank-defined attributes; the demo uses date of birth, which is **not** a policy decision | IDN-03, ADR-025 | Product owner, compliance | Phase 2 gate | Open `[BANK-DECIDES]` |
 | A-011 | 2026-10-29 | A customer's home branch is taken from the core record at link time and drives staff lookup scope | SEC-12 | Product owner | Phase 2 gate | Open |
 | A-012 | 2026-10-29 | Profile fields are limited to full name, date of birth, address, preferred name until forms (Phase 3) define the real data set | PRV-01 | Product owner | Phase 3 | Open |
+| A-013 | 2026-10-29 | Staff interface language set is a bank decision; the admin portal ships in English only for now | ADR-019 | Product owner | Phase 4 | Open `[BANK-DECIDES]` |
+| A-014 | 2026-10-29 | Phase 3 case states (submitted, returned to customer, resubmitted) and the internal-to-customer status mapping are a seed in code; Phase 4 moves the mapping to versioned configuration | ADR-012, ADR-018, ADR-026 | Tech lead | Phase 4 | Open |
+| A-015 | 2026-10-29 | Accepted file types are JPEG, PNG and PDF; default size cap 5 MB, hard cap 10 MB; signed links last 60 seconds. These are defaults, not bank policy | DOC-01, DOC-04 | Security lead | Phase 3 gate | Open `[BANK-DECIDES]` |
+| A-016 | 2026-10-29 | The object store and malware scanner are ports with refusing defaults; local disk and a test-string scanner exist for development only. Product choice, key management and retention are the bank's | DOC-02, DOC-04, DOC-15, ADR-009 | IT architecture | Phase 3 gate | Open `[BANK-DECIDES]` |
+| A-017 | 2026-10-29 | A case's branch is the customer's home branch when it is submitted; cases with no branch are visible to no staff until Phase 4 routing exists | SEC-12 | Product owner | Phase 4 | Open |
+| A-018 | 2026-10-29 | Mandatory documents are enforced at submission only; "mandatory before approval, signing or fulfilment" needs the Phase 4 engine | DOC-13 | Product owner | Phase 4 | Open |
 
 **Rule:** an assumption touching legal validity, KYC, AML, credit thresholds, approval limits, retention, residency, hosting or provider selection must be confirmed by the bank before production use.
 

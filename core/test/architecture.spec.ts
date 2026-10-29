@@ -27,7 +27,9 @@ describe('architecture rules (module boundaries)', () => {
       audit: ['audit_event'], configuration: ['config_definition', 'config_version', 'config_change_event'],
       'identity-access': ['user_account', 'role_assignment', 'delegation', 'app_session'],
       'customer-profile': ['customer_profile', 'customer_contact', 'customer_field_value', 'otp_challenge', 'otp_request_log', 'consent_record', 'customer_draft'],
-      'service-catalogue': [], platform: ['idempotency_record', 'schema_migration'],
+      'service-catalogue': [], forms: [],
+      case: ['app_case', 'case_transition', 'application_snapshot', 'info_request', 'case_note'],
+      'document-evidence': ['document', 'document_version', 'document_review', 'document_access_event'], platform: ['idempotency_record', 'schema_migration'],
     };
     const violations: string[] = [];
     for (const [mod, own] of Object.entries(owns)) {

@@ -164,6 +164,51 @@ Scenario: Crop/rotate does not destroy the source   # [DOC-09]
   Then the original is stored alongside the transformation metadata
 ```
 
+### D.2 Phase 3 additions (forms, documents, return loop)
+
+```gherkin
+Scenario: A published form validates on the server, whatever the client sends   # [FRM-01, FRM-05, FRM-06]
+  Given a published form with required, typed and conditional fields
+  When data that breaks its rules is submitted directly to the API
+  Then the submission is rejected with field-level errors
+  And customer-provided values are never silently changed; cleaning is offered only as a visible suggestion
+
+Scenario: A form cannot be published unless it is complete   # [CFG-03, FRM-06, SVC-07]
+  Given a form with a field that lacks a privacy classification, a Nepali label, a validation rule,
+        a reachable path, or a formula version on a calculated field
+  When the checker approves it
+  Then publication is blocked with the rule id
+
+Scenario: A draft keeps the form version it started on   # [FRM-02, FRM-03]
+  Given a customer saved a draft on form v1
+  When v2 is published
+  Then the draft still renders and validates against v1 and survives sign-in on another device
+
+Scenario: Submission is idempotent and atomic   # [FRM-07, FRM-10, SUB-01, SUB-02, SUB-04]
+  When a customer submits twice with the same idempotency key
+  Then exactly one case and one snapshot exist, with the same tracking code and receipt
+  And the tracking code is random and grants no access to anyone, including its owner without sign-in
+
+Scenario: Documents are checked, scanned and private   # [DOC-01..04, DOC-07, DOC-12]
+  When a file is uploaded
+  Then its type, size and signature are validated on the server
+  And staff cannot open it until the scan says clean
+  And the stored bytes are encrypted, hashed and never reachable by a public URL
+  And an expired or foreign signed link is refused
+  And every view and download is recorded
+
+Scenario: Replacement and duplicates   # [DOC-05, DOC-08]
+  When a document is replaced, version 1 stays retrievable by authorised staff
+  When the same file is uploaded for a different requirement, the customer is warned but may proceed
+
+Scenario: Staff return a case with specific corrections and the customer fixes it   # [RET-01..05, FRM-12, DOC-06, DOC-11]
+  When staff request corrections with a reason code, explicit customer text and targeted items
+  Then the customer sees exactly those items and none of the internal notes
+  When the customer responds
+  Then a new snapshot is stored, prior snapshots remain, and the case returns to review
+  And a reviewer cannot be the uploader of the document they verify
+```
+
 ## E. Submission and tracking
 
 ```gherkin

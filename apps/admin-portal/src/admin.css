@@ -1,0 +1,10 @@
+.admin { max-width: 1200px; margin: 0 auto; padding: var(--bbjp-space-3); }
+.admin header { display: flex; flex-wrap: wrap; gap: var(--bbjp-space-2); align-items: center; justify-content: space-between; }
+.admin nav { display: flex; flex-wrap: wrap; gap: var(--bbjp-space-2); }
+.admin h1 { font-size: 1.5rem; }
+.admin .status { padding: var(--bbjp-space-2) var(--bbjp-space-3); border-left: 6px solid var(--bbjp-primary); background: var(--bbjp-surface); margin-block: var(--bbjp-space-3); }
+.admin .card { border: 2px solid var(--bbjp-border); border-radius: var(--bbjp-radius); padding: var(--bbjp-space-3); margin-block: var(--bbjp-space-3); }
+.dz-grid { display: grid; gap: var(--bbjp-space-4); grid-template-columns: 1fr; }
+@media (min-width: 1000px) { .dz-grid { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); } .dz-grid .dz-aside { position: sticky; top: var(--bbjp-space-3); align-self: start; } }
+.dz-preview { border: 2px dashed var(--bbjp-border); border-radius: var(--bbjp-radius); padding: var(--bbjp-space-3); overflow-x: auto; background: var(--bbjp-bg); }
+.dz-phone { max-width: 360px; } .dz-desktop { max-width: 100%; }

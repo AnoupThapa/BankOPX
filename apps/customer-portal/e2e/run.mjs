@@ -55,7 +55,7 @@ for (const [name, viewport] of devices) {
   const errors = []; page.on('pageerror', (e) => errors.push(e.message));
   // Expected non-2xx answers: the load-time session probe (401), the deliberately wrong link details (422), a service with no saved draft yet (404).
   // Anything else is reported. Browser 'Failed to load resource' console lines are covered by this response check.
-  const expected = [[401, '/customer/profile'], [422, '/customer/profile/link'], [404, '/customer/drafts/']];
+  const expected = [[401, '/customer/profile'], [422, '/customer/profile/link'], [404, '/draft']];
   page.on('response', (r) => { if (r.status() >= 400 && !expected.some(([c, u]) => r.status() === c && r.url().includes(u))) errors.push(`${r.status()} ${new URL(r.url()).pathname}`); });
   page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(m.text()); });
   await page.goto(BASE);
@@ -114,10 +114,10 @@ for (const [name, viewport] of devices) {
   check(`${name}: "submitting is not an approval" shown`, await page.getByText(/not an approval/i).first().isVisible());
   check(`${name}: remote class shown`, await page.getByText(/a branch visit may be needed/i).first().isVisible());
   await noOverflow(page, `${name} service`); await axe(page, `${name} service`); await smallTargets(page, `${name} service`);
-  await page.getByLabel(/note for this request/i).fill('Home renovation, 6 months');
-  await page.getByRole('button', { name: /save and continue later/i }).click();
-  await page.getByText(/saved\. you can continue later/i).waitFor();
   await page.screenshot({ path: `${OUT}${name}-5-service.png`, fullPage: true });
+  await page.getByRole('button', { name: /start application/i }).click();
+  await page.getByLabel(/amount you would like to borrow/i).fill('250000');
+  await page.getByText(/saved automatically/i).waitFor();
 
   // Resume from a different device (AT-VS-01): new browser context, sign in again with a fresh OTP
   const ctx2 = await browser.newContext({ viewport });
@@ -132,7 +132,11 @@ for (const [name, viewport] of devices) {
   await page2.getByRole('button', { name: /^services$/i }).click();
   await page2.getByRole('button', { name: /personal loan enquiry/i }).click();
   await page2.getByRole('heading', { name: /personal loan enquiry/i }).waitFor();
-  check(`${name}: draft restored on a second device after re-authentication`, (await page2.getByLabel(/note for this request/i).inputValue()) === 'Home renovation, 6 months');
+  await page2.getByRole('button', { name: /continue your saved application/i }).click();
+  await page2.getByLabel(/amount you would like to borrow/i).waitFor();
+  check(`${name}: draft restored on a second device after re-authentication`, (await page2.getByLabel(/amount you would like to borrow/i).inputValue()) === '250000');
+  await page2.getByRole('button', { name: /^back$/i }).click();
+  await page2.getByRole('heading', { name: /personal loan enquiry/i }).waitFor();
 
   // Nepali
   await page2.getByRole('button', { name: 'नेपाली' }).click();

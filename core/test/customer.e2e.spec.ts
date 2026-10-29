@@ -166,12 +166,13 @@ describe('OTP rules (IDN-01, IDN-02, SEC-10)', () => {
   });
 
   it('per-IP limit applies across different destinations (IDN-01, SEC-10)', async () => {
+    const prevIp = process.env.OTP_MAX_PER_IP_HOUR;
     process.env.OTP_MAX_PER_IP_HOUR = '2';
     const ip = `198.51.100.${counter++ % 250}`;
     const ask = () => request(app.getHttpServer()).post('/customer/otp/request').set('X-Forwarded-For', ip).send({ institution: seed.code, channel: 'mobile', destination: mobile() });
     await ask().expect(202); await ask().expect(202);
     await ask().expect(429);
-    delete process.env.OTP_MAX_PER_IP_HOUR;
+    process.env.OTP_MAX_PER_IP_HOUR = prevIp;
     await request(app.getHttpServer()).post('/customer/otp/request').set('X-Forwarded-For', `198.51.101.${counter++ % 250}`).send({ institution: seed.code, channel: 'mobile', destination: mobile() }).expect(202);
   });
 

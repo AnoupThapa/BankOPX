@@ -14,12 +14,12 @@ describe('customer portal', () => {
   });
 
   it('every t(...) key used in the source exists (no hard-coded or missing strings)', () => {
-    const src = readFileSync(join(process.cwd(), 'src/App.tsx'), 'utf8');
+    const src = ['src/App.tsx', 'src/applications.tsx'].map((f) => readFileSync(join(process.cwd(), f), 'utf8')).join('\n');
     const keys = [...src.matchAll(/\bt\('([a-z_.]+)'\)/g)].map((m) => m[1]!);
     const known = new Set([...Object.keys(EXTRA.en)]);
-    const shared = ['status.', 'priority.', 'internal.', 'field.', 'button.'];
+    const shared = ['status.', 'priority.', 'internal.', 'field.', 'button.', 'form.'];
     for (const k of keys) expect(known.has(k) || shared.some((p) => k.startsWith(p))).toBe(true);
-    expect(keys.length).toBeGreaterThan(30);
+    expect(keys.length).toBeGreaterThan(50);
   });
 
   it('IDN-02: the sign-in screen says the code does not verify identity', async () => {
@@ -37,5 +37,26 @@ describe('customer portal', () => {
     const boxes = await screen.findAllByRole('checkbox');
     expect(boxes).toHaveLength(2);
     for (const b of boxes) expect(b).not.toBeChecked();
+  });
+});
+
+describe('case page (RET-02, RET-03)', () => {
+  it('renders a returned case: status, the customer-facing request, the items to fix, both submissions and both languages for every version label', async () => {
+    const { CaseView } = await import('./applications');
+    const { LocaleProvider } = await import('@bbjp/ui');
+    const detail = {
+      caseId: 'c1', trackingCode: 'BB-AAAAA-BBBBB', serviceKey: 'cert', customerStatus: 'more_info_needed', submittedAt: '2030-01-01T00:00:00Z',
+      request: { requestId: 'r1', reasonCode: 'mismatch', text: 'Your name does not match.', items: [{ type: 'field', key: 'full_name', text: 'Fix your name' }], dueAt: null },
+      documents: [], versions: [{ version: 1, kind: 'submission', at: '2030-01-01T00:00:00Z' }, { version: 2, kind: 'resubmission', at: '2030-01-02T00:00:00Z' }],
+      form: { versionId: 'f', version: 1, definition: { fields: [{ key: 'full_name', type: 'text', label: { en: 'Full name', ne: 'पूरा नाम' }, required: true }] } }, data: { full_name: 'Asha' },
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(detail), { status: 200 })));
+    for (const locale of ['en', 'ne'] as const) {
+      const { unmount } = render(<LocaleProvider locale={locale} extra={EXTRA}><CaseView caseId="c1" back={() => undefined} /></LocaleProvider>);
+      await screen.findByRole('heading', { name: 'BB-AAAAA-BBBBB' });
+      expect(screen.getByText('Fix your name')).toBeInTheDocument(); expect(screen.getByText('Your name does not match.')).toBeInTheDocument();
+      expect(screen.getAllByRole('listitem').length).toBeGreaterThanOrEqual(3);
+      unmount();
+    }
   });
 });

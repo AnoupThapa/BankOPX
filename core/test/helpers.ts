@@ -102,3 +102,34 @@ export async function publish(maker: Session, checker: Session, kind: string, ke
   await checker.agent.post(`/config/versions/${d.body.id}/approve`).set('x-csrf-token', checker.csrf).send({ reason: 'ok' }).expect(201);
   return d.body.id;
 }
+
+/** Customer sign-up and linking helpers for suites that need submitted cases. Synthetic data only. */
+export function customerKit(app: INestApplication, seed: Seed, delivery: CapturingOtpDelivery, core: FakeCoreBanking) {
+  let n = 0;
+  const mobile = () => `97${String(Date.now()).slice(-6)}${String(n++).padStart(2, '0')}`.slice(0, 10);
+  const ip = () => `10.${200 + (n % 50)}.${n % 250}.${Math.floor(n / 250)}`;
+  async function signUp(destination = mobile()) {
+    const agent = request.agent(app.getHttpServer());
+    const r = await agent.post('/customer/otp/request').set('X-Forwarded-For', ip()).send({ institution: seed.code, channel: 'mobile', destination }).expect(202);
+    const v = await agent.post('/customer/otp/verify').send({ institution: seed.code, challengeId: r.body.challengeId, code: delivery.last(destination).code }).expect(200);
+    return { agent, csrf: v.body.csrfToken as string, destination };
+  }
+  type C = Awaited<ReturnType<typeof signUp>>;
+  const post = (c: C, url: string, body: object = {}) => c.agent.post(url).set('x-csrf-token', c.csrf).send(body);
+  async function stepUp(c: C) {
+    const r = await post(c, '/customer/stepup/request').expect(202);
+    await post(c, '/customer/stepup/verify', { challengeId: r.body.challengeId, code: delivery.last(c.destination).code }).expect(204);
+  }
+  /** Signs up, completes consent and links to a fresh core record in the given branch, so staff of that branch can see the customer's cases. */
+  async function linkedCustomer(branch: 'A' | 'B' | null = 'A') {
+    const c = await signUp();
+    if (branch) {
+      const acct = `7${String(Date.now()).slice(-6)}${String(n++).padStart(3, '0')}`;
+      core.records.set(acct, { ref: `CORE-${acct}`, branch, verify: { dob: '1985-05-05' }, accounts: [] });
+      await stepUp(c);
+      await post(c, '/customer/profile/link', { accountNumber: acct, verification: { dob: '1985-05-05' } }).expect(200);
+    }
+    return c;
+  }
+  return { signUp, stepUp, linkedCustomer, post };
+}
