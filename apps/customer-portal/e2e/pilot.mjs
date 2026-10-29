@@ -29,7 +29,7 @@ async function axe(page, label) {
 const noOverflow = async (page, label) => check(`${label}: no horizontal scrolling`, !(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)));
 
 let lastPage; const pageErrors = [];
-process.on('uncaughtException', async (e) => { console.log('FAILED:', e.message.split('\n')[0]); console.log('page errors:', pageErrors.slice(0, 2)); try { console.log('--- page text ---\n' + (await lastPage.locator('body').innerText()).slice(0, 1500)); } catch { /* gone */ } process.exit(1); });
+process.on('uncaughtException', async (e) => { console.log('FAILED:', e.message.split('\n').slice(0, 3).join(' | ')); console.log('page errors:', pageErrors.slice(0, 2)); try { console.log('--- page text ---\n' + (await lastPage.locator('body').innerText()).slice(0, 1500)); } catch { /* gone */ } process.exit(1); });
 
 // ---- staff API helper for the steps that are not the point of this walkthrough ----
 async function staffApi(user) {

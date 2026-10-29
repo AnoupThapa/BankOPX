@@ -5,6 +5,9 @@ import { join } from 'path';
 import { vi } from 'vitest';
 import { LocaleProvider } from '@bbjp/ui';
 import { CreditPanel } from './credit';
+import { CollateralPanel } from './collateral';
+import { CollateralTradeOverview } from './overview';
+import { TradePanel } from './trade';
 import { PortfolioPage } from './portfolio';
 import { Handoffs } from './operations';
 import { PilotPage } from './pilot';
@@ -23,7 +26,7 @@ describe('staff portal', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('every t(...) key used in the source exists', () => {
-    const src = ['App.tsx', 'queue.tsx', 'workspace.tsx', 'tat.tsx', 'operations.tsx', 'pilot.tsx', 'credit.tsx', 'cases.tsx', 'portfolio.tsx'].map((f) => readFileSync(join(process.cwd(), 'src', f), 'utf8')).join('\n');
+    const src = ['App.tsx', 'queue.tsx', 'workspace.tsx', 'tat.tsx', 'operations.tsx', 'pilot.tsx', 'credit.tsx', 'cases.tsx', 'portfolio.tsx', 'collateral.tsx', 'trade.tsx', 'overview.tsx'].map((f) => readFileSync(join(process.cwd(), 'src', f), 'utf8')).join('\n');
     const keys = [...src.matchAll(/\bt\('([a-z_.]+)'\)/g)].map((m) => m[1]!);
     const shared = ['status.', 'priority.', 'internal.', 'field.', 'button.', 'form.', 'timeline.'];
     for (const k of keys) expect(k in EXTRA.en || shared.some((p) => k.startsWith(p))).toBe(true);
@@ -284,6 +287,90 @@ describe('staff portal', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ message: 'forbidden' }), { status: 403 })));
     wrap(<PortfolioPage />);
     expect(await screen.findByText('You do not have access to this page.')).toBeInTheDocument();
+  });
+
+  const Lc = (en: string) => ({ en, ne: `${en} (ne)` });
+  const colView = (over: object = {}) => ({
+    fileId: 'f', caseState: 'in_review', pinned: { list: 1, policy: 1 }, policy: { advanceRate: '0.5', initialCoverageMin: '1.25', maintenanceCoverageMin: '1.1', marginCallDeadlineHours: 48, valuationValidMinutes: 30 },
+    sources: [{ key: 'demo_feed', label: 'Demo feed', maxAgeMinutes: 60 }], securities: [{ symbol: 'AAA', name: 'Alpha', category: 'g', eligible: true }, { symbol: 'CCC', name: 'Gamma', category: 'g', eligible: false }],
+    holdings: [{ symbol: 'AAA', quantity: '1000', freeToPledge: true, note: null, pledge: { status: 'not_confirmed' } }], prices: [],
+    valuation: { seq: 1, status: 'incomplete', rows: [{ symbol: 'AAA', quantity: '1000', state: 'price_stale', price: '100', source: 'demo_feed', priceAsOf: '2026-06-01T10:00:00Z', marketValue: null, haircut: null, lendable: null, capped: false }], incompleteBecause: ['AAA: price_stale'],
+      totals: { marketValue: '0.00', lendableValue: '0.00', borrowingBase: '0.00', exposure: '60000.00' }, coverage: null, shortfall: null, tests: { initial: null, maintenance: null }, ageMinutes: 45, stale: true, engineVersion: 'margin-1' },
+    marginCalls: [], note: 'Pledges are created and released only in the authorised bank system.', ...over });
+  const colFetch = (st: object, view: object | null) => vi.stubGlobal('fetch', vi.fn(async (url: string) => (String(url).endsWith('/collateral/status') ? json({ enabled: true, exists: !!view, canPrepare: true, canMargin: false, canRecordPledge: false, ...st }) : json(view))));
+
+  it('COL-01, COL-02: the collateral panel shows source and time, says when a result is incomplete or stale, and offers no pledge, release, sell or liquidate control', async () => {
+    colFetch({}, colView());
+    const { container } = wrap(<CollateralPanel caseId="c1" />);
+    await screen.findByRole('heading', { name: 'Collateral (securities)' });
+    expect(screen.getByText(/Incomplete: a price is missing, too old or from an unapproved source/)).toBeInTheDocument();
+    expect(screen.getByText(/AAA: price_stale/)).toBeInTheDocument(); expect(screen.getByText('Price too old')).toBeInTheDocument(); expect(screen.getAllByText(/demo_feed/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/older than the approved validity/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^(pledge|release|sell|liquidate|trade)/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Record a pledge confirmation' })).not.toBeInTheDocument();            // not this person's right
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('only a person who may record pledges sees the form, and it asks for the bank system\'s reference; a margin call notice is offered only when the valuation calls for it', async () => {
+    colFetch({ canRecordPledge: true, canMargin: true }, colView({ valuation: { ...colView().valuation, status: 'margin_call_required', incompleteBecause: [], shortfall: '30000.00', coverage: '1.0000', stale: false } }));
+    wrap(<CollateralPanel caseId="c1" />);
+    await screen.findByRole('heading', { name: 'Collateral (securities)' });
+    expect(screen.getByLabelText('Reference from the bank system')).toBeRequired();
+    expect(screen.getByRole('button', { name: 'Record the margin call notice' })).toBeInTheDocument(); expect(screen.getByText('Margin call required')).toBeInTheDocument();
+    expect(screen.getByText('No pledge confirmation recorded', { exact: false })).toBeInTheDocument();
+  });
+
+  const tradeView = (over: object = {}) => ({ fileId: 't', pinned: 1, ready: false, notReady: 'documents_incomplete: invoice, transport_doc', keyDates: [{ kind: 'expiry', label: Lc('Expiry'), alertDaysBefore: 7, date: null, daysLeft: null }],
+    attendanceNeeded: [{ key: 'transport_doc', label: Lc('Transport document'), reason: Lc('The bank must see the original document') }], note: 'A scan is not an original.',
+    docs: [{ key: 'invoice', label: Lc('Commercial invoice'), required: true, originalRequired: false, inPersonReason: null, copy: 'under_review', original: 'not_required', complete: false, history: [{ type: 'copy_received', at: '2026-06-01T00:00:00Z', note: null, byMe: true }] },
+      { key: 'transport_doc', label: Lc('Transport document'), required: true, originalRequired: true, inPersonReason: Lc('x'), copy: 'accepted', original: 'received_unverified', complete: false, history: [] }], ...over });
+  const tradeFetch = (st: object, view: object | null) => vi.stubGlobal('fetch', vi.fn(async (url: string) => (String(url).endsWith('/trade/status') ? json({ enabled: true, exists: !!view, canPrepare: false, canReview: false, ...st }) : json(view))));
+
+  it('TRD-01, TRD-02: the trade panel lists originals needed in person, never shows a scan as complete, and offers each step only to the role that may take it', async () => {
+    tradeFetch({ canReview: true }, tradeView());
+    const a = wrap(<TradePanel caseId="c1" />);
+    await screen.findByRole('heading', { name: 'Trade documents' });
+    expect(screen.getByRole('region', { name: 'Original documents needed in person' })).toHaveTextContent('The bank must see the original document');
+    expect(screen.getByText('Received, not yet sighted by a second person')).toBeInTheDocument(); expect(screen.queryByText('Complete')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Accept Commercial invoice' })).toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Record original sighted Transport document' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Record copy received|Record original received/ })).not.toBeInTheDocument();     // officer steps are not the reviewer's
+    expect(screen.queryByRole('button', { name: /issue/i })).not.toBeInTheDocument();
+    a.unmount();
+    tradeFetch({ canPrepare: true }, tradeView({ docs: [{ ...tradeView().docs[0], copy: 'awaited', history: [] }] }));
+    wrap(<TradePanel caseId="c1" />);
+    expect(await screen.findByRole('button', { name: 'Record copy received Commercial invoice' })).toBeInTheDocument(); expect(screen.queryByRole('button', { name: /^Accept/ })).not.toBeInTheDocument();
+  });
+
+  it('the collateral and trade overview shows counts and alerts without customer or staff identities', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => (String(url).includes('/trade/alerts') ? json([{ caseId: 'c', trackingCode: 'BB-AAAAA-BBBBB', kind: 'expiry', date: '2030-01-03', past: false }])
+      : json({ asOf: '2030-01-01T00:00:00Z', files: 2, byValuation: { ok: 1, incomplete: 1 }, marginCalls: { open: 1, overdue: 1, resolved: 0 }, pledges: { confirmed: 1, notConfirmed: 1 }, definitions: { byValuation: 'Latest run per file.' } }))));
+    const { container } = wrap(<CollateralTradeOverview />);
+    await screen.findByRole('heading', { name: 'Collateral and trade overview' });
+    expect(screen.getByText(/expiry 2030-01-03/)).toBeInTheDocument(); expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('the price form follows the holdings: with a holding in a later security it offers that security, not the first on the list', async () => {
+    colFetch({}, colView({ holdings: [{ symbol: 'CCC', quantity: '5', freeToPledge: true, note: null, pledge: { status: 'not_confirmed' } }] }));
+    wrap(<CollateralPanel caseId="c1" />);
+    const sel = (await screen.findByLabelText('Price for')) as HTMLSelectElement;
+    expect(sel.value).toBe('CCC');
+  });
+
+  it('the overview shows the half a person may see: trade alerts only when the collateral counts are refused', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => (String(url).includes('/trade/alerts') ? json([]) : new Response(JSON.stringify({ message: 'forbidden' }), { status: 403 }))));
+    wrap(<CollateralTradeOverview />);
+    await screen.findByRole('heading', { name: 'Collateral and trade overview' });
+    expect(screen.getByText('No key dates are inside their alert window.')).toBeInTheDocument(); expect(screen.queryByText(/Collateral files/)).not.toBeInTheDocument();
+  });
+
+  it('every collateral and trade state the server can produce has wording', () => {
+    for (const k of ['ok', 'initial_coverage_not_met', 'margin_call_required', 'incomplete']) expect(`col.vs.${k}` in EXTRA.en).toBe(true);
+    for (const k of ['valued', 'not_on_list', 'not_eligible', 'not_free_to_pledge', 'price_missing', 'price_stale', 'source_not_approved']) expect(`col.rs.${k}` in EXTRA.en).toBe(true);
+    for (const k of ['awaited', 'under_review', 'discrepancy', 'accepted']) expect(`trade.cs.${k}` in EXTRA.en).toBe(true);
+    for (const k of ['awaited', 'received_unverified', 'sighted']) expect(`trade.os.${k}` in EXTRA.en).toBe(true);
+    for (const k of ['copy_received', 'discrepancy_raised', 'correction_received', 'accepted', 'original_received', 'original_sighted']) { expect(`trade.ev.${k}` in EXTRA.en).toBe(true); expect(`trade.act.${k}` in EXTRA.en).toBe(true); }
+    for (const g of ['valuation_current_and_ok', 'no_open_margin_call', 'trade_documents_complete']) expect(`check.gate_${g}` in EXTRA.en).toBe(true);
+    for (const d of ['no_valuation', 'valuation_too_old', 'valuation_incomplete', 'valuation_margin_call_required', 'valuation_initial_coverage_not_met', 'a_margin_call_is_open']) expect(`detail.${d}` in EXTRA.en).toBe(true);
   });
 });
 

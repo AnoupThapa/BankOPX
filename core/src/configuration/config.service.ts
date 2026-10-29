@@ -19,7 +19,7 @@ export interface VersionView { id: string; definitionId: string; version: number
 
 /** Versioned, immutable configuration with maker-checker (ADR-005, CFG-01..08, FRM-03, WFL-07). */
 /** Credit configuration is approved by the credit policy owner, not by the general checker (CRD-08). */
-const CREDIT_CONFIG_KINDS = ['proposal_type', 'checklist', 'calculation_set', 'scorecard'];
+const CREDIT_CONFIG_KINDS = ['proposal_type', 'checklist', 'calculation_set', 'scorecard', 'security_list', 'collateral_policy', 'trade_checklist'];   // product-specific legal and compliance sign-off for trade lies with the bank [BANK-DECIDES]
 const approvalPermission = (kind: string) => (CREDIT_CONFIG_KINDS.includes(kind) ? 'config.approve_credit' as const : 'config.approve' as const);
 
 @Injectable()

@@ -18,7 +18,9 @@ import { CoreBankingPort, OtpDelivery } from '../src/customer-profile';
 import { migrate } from '../src/platform/migrate';
 import { AppLogger } from '../src/platform';
 import { EicarTestScanner, MalwareScanner } from '../src/document-evidence';
-import { CREDIT_REVIEW_WORKFLOW, PILOT_CERTIFICATE_WORKFLOW, REFERENCE_WORKFLOW } from '../src/workflow';
+import { CREDIT_REVIEW_WORKFLOW, GATED_REVIEW_WORKFLOW, PILOT_CERTIFICATE_WORKFLOW, REFERENCE_WORKFLOW } from '../src/workflow';
+import { DEMO_COLLATERAL_POLICY, DEMO_SECURITY_LIST } from '../src/collateral';
+import { DEMO_TRADE_CHECKLIST } from '../src/trade';
 import { DEMO_CALC_SET, DEMO_CHECKLIST, DEMO_PROPOSAL_TYPE, DEMO_SCORECARD, ExternalCheckPort, ExternalCheckResult } from '../src/credit';
 import { LocalFsObjectStore, ObjectStore } from '../src/platform';
 import { mkdtempSync, writeFileSync } from 'fs';
@@ -62,6 +64,7 @@ async function main() {
       { name: 'approverSmall', actor: 'staff', role: 'approver', branch: 'A', maxAmount: 50000 }, { name: 'approverBig', actor: 'staff', role: 'approver', branch: 'A', maxAmount: 10_000_000 }, { name: 'approverBig2', actor: 'staff', role: 'approver', branch: 'A', maxAmount: 10_000_000 },
       { name: 'policyowner', actor: 'admin', role: 'credit_policy_owner', highRiskApproved: true },
       { name: 'creditA', actor: 'staff', role: 'credit_officer', branch: 'A' }, { name: 'creditA2', actor: 'staff', role: 'credit_officer', branch: 'A' },
+      { name: 'colA', actor: 'staff', role: 'collateral_officer', branch: 'A' }, { name: 'tradeOff', actor: 'staff', role: 'trade_officer', branch: 'A' }, { name: 'tradeRev', actor: 'staff', role: 'trade_reviewer', branch: 'A' },
       { name: 'ops', actor: 'staff', role: 'operations_officer', branch: 'A' }, { name: 'sched', actor: 'integration', role: 'integration_service' },
     ], 'demo');
     // Synthetic staff logins for local walkthroughs and the browser test. Written to a file the developer controls; never used outside development.
@@ -129,6 +132,16 @@ async function main() {
       title: loc('Business loan, joint approval (demo)', 'व्यापार ऋण, संयुक्त स्वीकृति (डेमो)'), description: loc('Demo of per-party income, an external check and two-approver approval above a threshold.', 'पार्टीअनुसार आम्दानी, बाह्य जाँच र सीमा माथि दुई स्वीकृतकर्ताको डेमो।'),
       whoCanApply: loc('Existing customers (demo).', 'वर्तमान ग्राहक (डेमो)।'), fees: loc('Fees shown at offer stage (demo)', 'प्रस्ताव चरणमा शुल्क देखाइन्छ (डेमो)'), supportChannel: loc('Visit any branch (demo)', 'कुनै पनि शाखामा जानुहोस् (डेमो)'),
       visitReason: loc('The bank may ask to see original documents in a branch.', 'बैंकले शाखामा मूल कागजात हेर्न माग्न सक्छ।') });
+    // Phase 7a demo: securities-backed lending and a trade request. Invented securities, rates and documents; not any bank's policy.
+    await publish(maker, checker, 'workflow', 'margin-flow', GATED_REVIEW_WORKFLOW(['valuation_current_and_ok', 'no_open_margin_call']));
+    await publish(maker, checker, 'workflow', 'trade-flow', GATED_REVIEW_WORKFLOW(['trade_documents_complete']));
+    await publish(maker, po, 'security_list', 'demo-securities', DEMO_SECURITY_LIST()); await publish(maker, po, 'collateral_policy', 'demo-collateral', DEMO_COLLATERAL_POLICY()); await publish(maker, po, 'trade_checklist', 'demo-trade', DEMO_TRADE_CHECKLIST());
+    const common = { ...base, formKey: 'business-loan-form', requiresExistingRelationship: true, remoteClass: 'remote_first_conditional', documents: ['A photo of your ID'], whoCanApply: loc('Existing customers (demo).', 'वर्तमान ग्राहक (डेमो)।'),
+      fees: loc('Fees shown at offer stage (demo)', 'प्रस्ताव चरणमा शुल्क देखाइन्छ (डेमो)'), supportChannel: loc('Visit any branch (demo)', 'कुनै पनि शाखामा जानुहोस् (डेमो)'), visitReason: loc('The bank may ask to see original documents in a branch.', 'बैंकले शाखामा मूल कागजात हेर्न माग्न सक्छ।') };
+    await publish(maker, checker, 'service', 'margin-loan', { ...common, workflowKey: 'margin-flow', collateral: { productClass: 'demo_margin', securityListKey: 'demo-securities', policyKey: 'demo-collateral', amountField: 'amount', currency: 'NPR' },
+      title: loc('Margin loan (demo)', 'मार्जिन ऋण (डेमो)'), description: loc('A loan against shares, with valuation and margin tracking. Invented terms.', 'सेयर धितोमा ऋण, मूल्याङ्कन र मार्जिन अनुगमनसहित। कल्पित सर्तहरू।') });
+    await publish(maker, checker, 'service', 'trade-request', { ...common, workflowKey: 'trade-flow', trade: { productClass: 'demo_trade', checklistKey: 'demo-trade' }, fulfilment: { connector: 'controlled-handoff', operation: 'issue_instrument' },
+      title: loc('Trade request (demo)', 'व्यापार अनुरोध (डेमो)'), description: loc('A trade instrument request with a document checklist. Invented documents.', 'कागजात सूचीसहितको व्यापार उपकरण अनुरोध। कल्पित कागजातहरू।') });
     process.stdout.write('[dev] seeded demo institution\n');
   }
   const port = Number(process.env.PORT ?? 3100);

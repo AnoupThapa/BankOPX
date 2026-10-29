@@ -12,6 +12,8 @@ export const PERMISSIONS = [
   'case.clear', 'case.assign', 'workflow.read', 'tat.read',
   'integration.operate', 'pilot.read', 'pilot.baseline',
   'credit.read', 'credit.prepare', 'credit.condition_clear', 'config.approve_credit',
+  'collateral.read', 'collateral.prepare', 'collateral.margin', 'collateral.pledge_record',
+  'trade.read', 'trade.prepare', 'trade.review',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -27,15 +29,20 @@ export interface RoleDef {
 
 export const ROLES: Record<string, RoleDef> = {
   branch_officer: { permissions: ['case.read', 'case.review', 'customer.lookup', 'document.read', 'tat.read'], actorTypes: ['staff'], scoped: ['case.read', 'case.review', 'customer.lookup', 'document.read', 'tat.read'], highRisk: false },
-  approver: { permissions: ['case.read', 'case.approve', 'document.read', 'tat.read', 'credit.read'], actorTypes: ['staff'], scoped: ['case.read', 'case.approve', 'document.read', 'tat.read', 'credit.read'], highRisk: false },
+  approver: { permissions: ['case.read', 'case.approve', 'document.read', 'tat.read', 'credit.read', 'collateral.read', 'trade.read'], actorTypes: ['staff'], scoped: ['case.read', 'case.approve', 'document.read', 'tat.read', 'credit.read', 'collateral.read', 'trade.read'], highRisk: false },
   // Compliance and legal clearances: a separate duty from branch review (WFL-02).
   compliance_officer: { permissions: ['case.read', 'case.clear', 'document.read'], actorTypes: ['staff'], scoped: ['case.read', 'case.clear', 'document.read'], highRisk: false },
   // Team leads assign and reassign work inside their branches; they do not decide (DEC-02).
   team_lead: { permissions: ['case.read', 'case.review', 'case.assign', 'document.read', 'tat.read', 'credit.read'], actorTypes: ['staff'], scoped: ['case.read', 'case.review', 'case.assign', 'document.read', 'tat.read', 'credit.read'], highRisk: false },
   // Operations: watch, resolve and retry hand-offs to the bank's systems and enter pilot baselines. Cannot review, approve or configure (DEC-02, SEC-11).
-  operations_officer: { permissions: ['integration.operate', 'pilot.read', 'pilot.baseline', 'tat.read'], actorTypes: ['staff'], scoped: ['integration.operate', 'pilot.read', 'tat.read'], highRisk: false },
+  operations_officer: { permissions: ['integration.operate', 'pilot.read', 'pilot.baseline', 'tat.read', 'collateral.read', 'collateral.pledge_record', 'trade.read'], actorTypes: ['staff'], scoped: ['integration.operate', 'pilot.read', 'tat.read', 'collateral.read', 'collateral.pledge_record', 'trade.read'], highRisk: false },
   // Credit officers prepare the proposal: inputs, calculations, checklist, recommendation, conditions. They do not approve (DEC-02).
   credit_officer: { permissions: ['case.read', 'case.review', 'document.read', 'tat.read', 'credit.read', 'credit.prepare', 'credit.condition_clear'], actorTypes: ['staff'], scoped: ['case.read', 'case.review', 'document.read', 'tat.read', 'credit.read', 'credit.prepare', 'credit.condition_clear'], highRisk: false },
+  // Securities-backed lending: values collateral and handles margin calls. Does not record pledges (operations does, from the authorised system) and does not approve (DEC-02).
+  collateral_officer: { permissions: ['case.read', 'case.review', 'document.read', 'tat.read', 'collateral.read', 'collateral.prepare', 'collateral.margin'], actorTypes: ['staff'], scoped: ['case.read', 'case.review', 'document.read', 'tat.read', 'collateral.read', 'collateral.prepare', 'collateral.margin'], highRisk: false },
+  // Trade finance: the officer receives copies, raises dates and records originals received; a different reviewer accepts documents and sights originals (TRD-01, TRD-02).
+  trade_officer: { permissions: ['case.read', 'case.review', 'document.read', 'tat.read', 'trade.read', 'trade.prepare'], actorTypes: ['staff'], scoped: ['case.read', 'case.review', 'document.read', 'tat.read', 'trade.read', 'trade.prepare'], highRisk: false },
+  trade_reviewer: { permissions: ['case.read', 'document.read', 'trade.read', 'trade.review'], actorTypes: ['staff'], scoped: ['case.read', 'document.read', 'trade.read', 'trade.review'], highRisk: false },
   // The credit policy owner approves checklists, calculation sets, scorecards and proposal types (CRD-08). A different person from the maker (CFG-01).
   credit_policy_owner: { permissions: ['config.approve_credit', 'config.read'], actorTypes: ['admin'], scoped: [], highRisk: true },
   config_maker: { permissions: ['config.draft', 'config.submit', 'config.read', 'workflow.read'], actorTypes: ['admin'], scoped: [], highRisk: false },

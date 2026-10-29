@@ -65,6 +65,24 @@ export interface CreditPortfolio {
   conditions: { open: number; overdue: number; cleared: number }; externalChecks: Record<string, number>; definitions?: Record<string, string>;
 }
 
+export interface CollateralStatus { enabled: boolean; exists: boolean; canPrepare: boolean; canMargin: boolean; canRecordPledge: boolean }
+export interface CollateralRow { symbol: string; quantity: string; state: string; price: string | null; source: string | null; priceAsOf: string | null; marketValue: string | null; haircut: string | null; lendable: string | null; capped: boolean }
+export interface CollateralView {
+  fileId: string; caseState: string; pinned: { list: number; policy: number };
+  policy: { advanceRate: string; initialCoverageMin: string; maintenanceCoverageMin: string; marginCallDeadlineHours: number; valuationValidMinutes: number };
+  sources: Array<{ key: string; label: string; maxAgeMinutes: number }>; securities: Array<{ symbol: string; name: string; category: string; eligible: boolean }>;
+  holdings: Array<{ symbol: string; quantity: string; freeToPledge: boolean; note: string | null; pledge: { status: string; reference?: string } }>; prices: Array<{ symbol: string; price: string; sourceKey: string; asOf: string }>;
+  valuation: { seq: number; status: string; rows: CollateralRow[]; incompleteBecause: string[]; totals: Record<string, string>; coverage: string | null; shortfall: string | null; tests: { initial: boolean | null; maintenance: boolean | null }; ageMinutes: number; stale: boolean; engineVersion: string } | null;
+  marginCalls: Array<{ id: string; shortfall: string; notice: string; deadline: string; status: string; overdue: boolean; resolution: string | null; evidence: string | null }>; note: string;
+}
+export interface TradeStatus { enabled: boolean; exists: boolean; canPrepare: boolean; canReview: boolean }
+export interface TradeView {
+  fileId: string; pinned: number; ready: boolean; notReady: string | null;
+  docs: Array<{ key: string; label: Loc; required: boolean; originalRequired: boolean; inPersonReason: Loc | null; copy: string; original: string; complete: boolean; history: Array<{ type: string; at: string; note: string | null; byMe: boolean }> }>;
+  keyDates: Array<{ kind: string; label: Loc; alertDaysBefore: number; date: string | null; daysLeft: number | null }>; attendanceNeeded: Array<{ key: string; label: Loc; reason: Loc | null }>; note: string;
+}
+export interface CollateralPortfolio { asOf: string; files: number; byValuation: Record<string, number>; marginCalls: { open: number; overdue: number; resolved: number }; pledges: { confirmed: number; notConfirmed: number }; definitions?: Record<string, string> }
+
 export const api = {
   login: async (institution: string, username: string, password: string) => { const r = await call<{ csrfToken: string }>('POST', '/auth/login', { institution, username, password }); csrf = r.csrfToken; },
   mfa: (code: string) => call<void>('POST', '/auth/mfa/verify', { code }),
@@ -88,6 +106,14 @@ export const api = {
   baseline: (body: object) => call<unknown>('POST', '/staff/pilot/baselines', body),
   cases: () => call<Array<{ caseId: string; trackingCode: string; serviceKey: string; state: string; submittedAt: string }>>('GET', '/staff/cases'),
   creditPortfolio: () => call<CreditPortfolio>('GET', '/staff/credit/portfolio'),
+  collateralStatus: (id: string) => call<CollateralStatus>('GET', `/staff/cases/${id}/collateral/status`),
+  collateral: (id: string) => call<CollateralView>('GET', `/staff/cases/${id}/collateral`),
+  collateralPost: <T = unknown>(id: string, path: string, body: object = {}) => call<T>('POST', `/staff/cases/${id}/collateral${path}`, body),
+  collateralPortfolio: () => call<CollateralPortfolio>('GET', '/staff/collateral/portfolio'),
+  tradeStatus: (id: string) => call<TradeStatus>('GET', `/staff/cases/${id}/trade/status`),
+  trade: (id: string) => call<TradeView>('GET', `/staff/cases/${id}/trade`),
+  tradePost: <T = unknown>(id: string, path: string, body: object = {}) => call<T>('POST', `/staff/cases/${id}/trade${path}`, body),
+  tradeAlerts: () => call<Array<{ caseId: string; trackingCode: string; kind: string; date: string; past: boolean }>>('GET', '/staff/trade/alerts'),
   creditStatus: (caseId: string) => call<CreditStatus>('GET', `/staff/cases/${caseId}/credit/status`),
   credit: (caseId: string) => call<CreditView>('GET', `/staff/cases/${caseId}/credit`),
   creditPost: <T = unknown>(caseId: string, path: string, body: object = {}, key?: string) => call<T>('POST', `/staff/cases/${caseId}/credit${path}`, body, key ? { 'idempotency-key': key } : {}),

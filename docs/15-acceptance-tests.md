@@ -528,6 +528,45 @@ Scenario: Overdue conditions and portfolio   # [docs/10 §6]
   And the portfolio shows counts for the viewer's branches only, with definitions and no identities
 ```
 
+## M. Collateral and trade documents (Phase 7a)
+
+Written before the collateral and trade APIs (after the arithmetic module and its unit tests).
+
+```gherkin
+Scenario: The platform never acts on collateral   # [COL-01]
+  Then no route or setting places or releases a pledge, trades, sells or liquidates
+  And a pledge or release is recorded only as a confirmation given by the authorised system, with its reference, by a person who may record it
+
+Scenario: Valuations show their source and time and never assume a price   # [COL-02, CRD-04]
+  When a price is missing, too old for its source, or from a source the approved list does not name
+  Then the valuation is "incomplete", with no pass, no fail and no shortfall
+
+Scenario: Approved rules only   # [COL-03]
+  Then haircuts, advance rate, coverage levels, concentration limits and validity come from definitions approved by the credit policy owner
+  And an open file keeps the versions it started with
+
+Scenario: Approval waits for the collateral   # [COL-03, COL-04]
+  When the approval has gates
+  Then no valuation, a failing or old valuation, or an open margin call blocks it with the reason shown
+  And passing the gates never approves anything
+
+Scenario: Margin calls are tracked   # [COL-04]
+  Then a person records the notice, the deadline comes from the policy, overdue calls are flagged once
+  And "cured" needs a newer valuation that meets the maintenance level; a call may also end through the bank's own process with evidence
+
+Scenario: A scan is not an original   # [TRD-01]
+  When a document needs an original
+  Then an accepted copy does not complete it; a different person must sight the original; attendance is listed until then
+
+Scenario: Discrepancies go through people   # [TRD-02]
+  Then a reviewer raises a discrepancy with a note, the officer records the correction, a person other than the one who received the copy accepts
+  And approval is blocked until every required document is complete
+
+Scenario: Issuance is confirmed by the trade system   # [TRD-03]
+  When a trade request is approved
+  Then a hand-off is created and the customer sees "in progress" until the authorised system's reference is recorded
+```
+
 ## K. Phase exit-gate checklists
 
 ### Phase 1 — Architecture, security foundation
