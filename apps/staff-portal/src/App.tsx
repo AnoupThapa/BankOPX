@@ -6,11 +6,12 @@ import { EXTRA } from './messages';
 import { CasesPage } from './cases';
 import { Handoffs } from './operations';
 import { PilotPage } from './pilot';
+import { PortfolioPage } from './portfolio';
 import { Queue } from './queue';
 import { TatPage } from './tat';
 import { CaseWorkspace } from './workspace';
 
-type View = { name: 'queue' } | { name: 'cases' } | { name: 'tat' } | { name: 'handoffs' } | { name: 'pilot' } | { name: 'case'; id: string };
+type View = { name: 'queue' } | { name: 'portfolio' } | { name: 'cases' } | { name: 'tat' } | { name: 'handoffs' } | { name: 'pilot' } | { name: 'case'; id: string };
 
 export function App() { return <LocaleProvider locale="en" extra={EXTRA}><Shell /></LocaleProvider>; }
 
@@ -28,12 +29,13 @@ function Shell() {
           <Button variant={view.name === 'cases' ? 'primary' : 'secondary'} aria-pressed={view.name === 'cases'} onClick={() => setView({ name: 'cases' })}>{t('nav.cases')}</Button>
           <Button variant={view.name === 'tat' ? 'primary' : 'secondary'} aria-pressed={view.name === 'tat'} onClick={() => setView({ name: 'tat' })}>{t('nav.tat')}</Button>
           <Button variant={view.name === 'handoffs' ? 'primary' : 'secondary'} aria-pressed={view.name === 'handoffs'} onClick={() => setView({ name: 'handoffs' })}>{t('nav.handoffs')}</Button>
+          <Button variant={view.name === 'portfolio' ? 'primary' : 'secondary'} aria-pressed={view.name === 'portfolio'} onClick={() => setView({ name: 'portfolio' })}>{t('nav.portfolio')}</Button>
           <Button variant={view.name === 'pilot' ? 'primary' : 'secondary'} aria-pressed={view.name === 'pilot'} onClick={() => setView({ name: 'pilot' })}>{t('nav.pilot')}</Button>
           <Button variant="secondary" onClick={async () => { await api.logout().catch(() => undefined); setMe(null); }}>{t('nav.signout')}</Button>
         </nav>
       </header>
       <main>
-        {view.name === 'queue' ? <Queue open={(id) => setView({ name: 'case', id })} /> : view.name === 'cases' ? <CasesPage open={(id) => setView({ name: 'case', id })} /> : view.name === 'tat' ? <TatPage /> : view.name === 'handoffs' ? <Handoffs /> : view.name === 'pilot' ? <PilotPage /> : <CaseWorkspace key={view.id} caseId={view.id} back={() => setView({ name: 'queue' })} />}
+        {view.name === 'queue' ? <Queue open={(id) => setView({ name: 'case', id })} /> : view.name === 'cases' ? <CasesPage open={(id) => setView({ name: 'case', id })} /> : view.name === 'tat' ? <TatPage /> : view.name === 'handoffs' ? <Handoffs /> : view.name === 'pilot' ? <PilotPage /> : view.name === 'portfolio' ? <PortfolioPage /> : <CaseWorkspace key={view.id} caseId={view.id} back={() => setView({ name: 'queue' })} />}
       </main>
     </div>
   );

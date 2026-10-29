@@ -4,6 +4,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { vi } from 'vitest';
 import { LocaleProvider } from '@bbjp/ui';
+import { Definitions } from './definitions';
 import { Designer, emptyField } from './designer';
 import { EXTRA } from './messages';
 
@@ -13,7 +14,7 @@ describe('form designer (CFG-03, FRM-06, SVC-07)', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('every t(...) key used in the admin source exists', () => {
-    const src = ['App.tsx', 'designer.tsx', 'review.tsx', 'workflow-designer.tsx'].map((f) => readFileSync(join(process.cwd(), 'src', f), 'utf8')).join('\n');
+    const src = ['App.tsx', 'designer.tsx', 'review.tsx', 'workflow-designer.tsx', 'definitions.tsx'].map((f) => readFileSync(join(process.cwd(), 'src', f), 'utf8')).join('\n');
     const keys = [...src.matchAll(/\bt\('([a-z_.]+)'\)/g)].map((m) => m[1]!);
     const shared = ['status.', 'priority.', 'internal.', 'field.', 'button.', 'form.'];
     for (const k of keys) expect(k in EXTRA.en || shared.some((p) => k.startsWith(p))).toBe(true);
@@ -97,3 +98,33 @@ describe('workflow designer outline', () => {
     expect(outline({ start: 'a', nodes: { a: { type: 'task', outcomes: { complete: 'a' } } } }).length).toBe(1);
   });
 });
+
+describe('credit definitions drafting (CRD-08, CFG-03)', () => {
+  afterEach(() => vi.restoreAllMocks());
+  const type = (label: string | RegExp, v: string) => fireEvent.change(screen.getByLabelText(label), { target: { value: v } });
+
+  it('nothing is pre-filled; invalid JSON is refused before anything is sent; the publication blockers are shown; sending needs a key and a reason', async () => {
+    const f = vi.fn(async () => new Response(JSON.stringify({ ok: false, errors: ['CRD-03: measure \'x\' has no worked example (independent validation)'] }), { status: 201 }));
+    vi.stubGlobal('fetch', f);
+    const { container } = wrap(<Definitions />);
+    expect((screen.getByLabelText('Definition (JSON)') as HTMLTextAreaElement).value.trim()).toBe('{\n}'.trim());
+    expect(screen.getByRole('button', { name: 'Save and send for review' })).toBeDisabled();
+    type('Definition (JSON)', '{ not json'); fireEvent.click(screen.getByRole('button', { name: 'Check against the publication rules' }));
+    expect(await screen.findByText(/not valid JSON/)).toBeInTheDocument(); expect(f).not.toHaveBeenCalled();
+    type('Definition (JSON)', '{"name":"x"}'); fireEvent.click(screen.getByRole('button', { name: 'Check against the publication rules' }));
+    expect(await screen.findByText(/no worked example/)).toBeInTheDocument();
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('a definition that passes is saved as a draft and submitted for review; approval is not offered here', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => { calls.push(String(url)); return new Response(JSON.stringify(String(url).includes('validate') ? { ok: true, errors: [] } : String(url).includes('drafts') ? { id: 'v1', version: 3 } : { status: 'in_review' }), { status: 201 }); }));
+    wrap(<Definitions />);
+    type('Key', 'demo-card'); type('Reason for this version', 'new thresholds'); type('Definition (JSON)', '{"name":"x"}');
+    fireEvent.click(screen.getByRole('button', { name: 'Save and send for review' }));
+    expect(await screen.findByText(/Saved and sent to the review queue \(v3\)/)).toBeInTheDocument();
+    expect(calls).toEqual(['/config/validate', '/config/drafts', '/config/versions/v1/submit']);
+    expect(screen.queryByRole('button', { name: /approve/i })).not.toBeInTheDocument();
+  });
+});
+

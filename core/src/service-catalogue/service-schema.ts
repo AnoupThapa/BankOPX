@@ -31,7 +31,7 @@ export const serviceValidator: ConfigValidator = (kind, c) => {
   if (c.credit !== undefined) {
     const k = c.credit as Record<string, unknown>; const key = (v: unknown) => typeof v === 'string' && /^[a-z0-9_.-]{1,64}$/.test(v);
     if (!k || typeof k !== 'object' || !key(k.productClass) || !key(k.checklistKey) || !key(k.calculationSetKey) || !key(k.amountField)
-        || (k.scorecardKey !== undefined && !key(k.scorecardKey)) || (k.tenorField !== undefined && !key(k.tenorField)) || (k.purposeField !== undefined && !key(k.purposeField))
+        || (k.scorecardKey !== undefined && !key(k.scorecardKey)) || (k.externalChecks !== undefined && (!Array.isArray(k.externalChecks) || !k.externalChecks.every(key))) || (k.tenorField !== undefined && !key(k.tenorField)) || (k.purposeField !== undefined && !key(k.purposeField))
         || typeof k.currency !== 'string' || !/^[A-Z]{3}$/.test(k.currency)) e.push('CRD-07: credit needs productClass, checklistKey, calculationSetKey, amountField and a currency');
   }
   const a = c.availability as Record<string, unknown> | undefined;

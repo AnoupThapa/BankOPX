@@ -1,7 +1,7 @@
 import { CALC_ENGINE_VERSION, evaluate } from './calc';
 import { DEMO_CALC_SET, DEMO_CHECKLIST, DEMO_PROPOSAL_TYPE, DEMO_SCORECARD } from './credit-fixtures';
 import { creditValidator } from './credit-schema';
-import { add, div, formatDec, mul, parseDec } from './decimal';
+import { add, div, formatDec, mul, parseDec } from '../platform';
 import { score } from './scorecard';
 
 const NOW = new Date('2026-06-01T00:00:00Z');
@@ -118,5 +118,27 @@ describe('credit configuration publish checks (CFG-03, CRD-01, CRD-03, CRD-05, C
     const c = DEMO_CHECKLIST(); (c.items[1] as { key: string }).key = 'identity_kyc'; delete (c.items[2] as { required?: boolean }).required;
     expect(run('checklist', c).errors.length).toBeGreaterThanOrEqual(2);
     expect(run('checklist', { ...DEMO_CHECKLIST(), owner: '' }).ok).toBe(false);
+  });
+});
+
+import { aggregateParties } from './aggregate';
+
+describe('party-scoped inputs (CRD-02, CRD-04)', () => {
+  const parties = [{ id: 'a', role: 'borrower' }, { id: 'b', role: 'co_applicant' }, { id: 'c', role: 'guarantor' }];
+  const v = (value: string, asOf = '2026-05-01', conflict = false) => ({ value, asOf, conflict });
+  it('adds, takes the highest or the lowest over the configured roles only', () => {
+    const vals = new Map([['a', v('100')], ['b', v('50.5')], ['c', v('1000')]]);
+    expect(aggregateParties({ partyRoles: ['borrower', 'co_applicant'], aggregate: 'sum' }, parties, vals)).toMatchObject({ value: '150.5', conflict: false });
+    expect(aggregateParties({ partyRoles: ['borrower', 'co_applicant'], aggregate: 'max' }, parties, vals)).toMatchObject({ value: '100' });
+    expect(aggregateParties({ partyRoles: ['borrower', 'co_applicant'], aggregate: 'min' }, parties, vals)).toMatchObject({ value: '50.5' });
+  });
+  it('a counted party without a value makes the whole figure missing; no counted party at all is missing; a contested party contests it', () => {
+    expect(aggregateParties({ partyRoles: ['borrower', 'co_applicant'], aggregate: 'sum' }, parties, new Map([['a', v('100')]]))).toEqual({ missing: true, lacking: ['b'] });
+    expect(aggregateParties({ partyRoles: ['nobody'], aggregate: 'sum' }, parties, new Map())).toEqual({ missing: true, lacking: [] });
+    expect(aggregateParties({ partyRoles: ['borrower', 'co_applicant'], aggregate: 'sum' }, parties, new Map([['a', v('100')], ['b', v('5', '2026-05-01', true)]]))).toMatchObject({ conflict: true });
+  });
+  it('the combined figure carries the oldest date, so staleness cannot be hidden by a fresh co-applicant value', () => {
+    const r = aggregateParties({ partyRoles: ['borrower', 'co_applicant'], aggregate: 'sum' }, parties, new Map([['a', v('1', '2024-01-01')], ['b', v('1', '2026-05-01')]]));
+    expect(r).toMatchObject({ asOf: '2024-01-01' });
   });
 });

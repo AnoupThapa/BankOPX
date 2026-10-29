@@ -32,7 +32,7 @@ export function CreditPanel({ caseId }: { caseId: string }) {
       <h2 id="credit-h">{t('credit.title')}</h2>
       <p className="hint">{t('credit.stance')}</p>
       {msg && <p role={msg.ok ? 'status' : 'alert'} className="status">{msg.text}</p>}
-      {!v ? <OpenForm st={st} open={(type) => act(() => api.creditPost(caseId, '', { proposalTypeKey: type }, api.newKey()))} /> : <Workspace caseId={caseId} v={v} canPrepare={st.canPrepare} act={act} />}
+      {!v ? <OpenForm st={st} open={(type) => act(() => api.creditPost(caseId, '', { proposalTypeKey: type }, api.newKey()))} /> : <Workspace caseId={caseId} v={v} canPrepare={st.canPrepare} providers={st.externalCheckProviders ?? []} act={act} />}
     </section>
   );
 }
@@ -53,7 +53,7 @@ function OpenForm({ st, open }: { st: CreditStatus; open: (type: string) => Prom
 const measureText = (m: MeasureRes, t: (k: string) => string): string =>
   m.status === 'ok' ? m.value : m.status === 'missing' ? `${t('credit.m.missing')}: ${m.missing.join(', ')}` : m.status === 'stale' ? `${t('credit.m.stale')}: ${m.stale.join(', ')}` : m.status === 'conflict' ? `${t('credit.m.conflict')}: ${m.conflicting.join(', ')}` : t('credit.m.undefined');
 
-function Workspace({ caseId, v, canPrepare, act }: { caseId: string; v: CreditView; canPrepare: boolean; act: (fn: () => Promise<unknown>, done?: string) => Promise<boolean> }) {
+function Workspace({ caseId, v, canPrepare, providers, act }: { caseId: string; v: CreditView; canPrepare: boolean; providers: string[]; act: (fn: () => Promise<unknown>, done?: string) => Promise<boolean> }) {
   const t = useT(); const loc = useLocale();
   const editable = canPrepare && (v.caseState === 'in_review' || v.caseState === 'resubmitted');
   const label = (l: { en: string; ne: string }) => l[loc] || l.en;
@@ -89,7 +89,7 @@ function Workspace({ caseId, v, canPrepare, act }: { caseId: string; v: CreditVi
       <section aria-labelledby="cr-in"><h3 id="cr-in">{t('credit.inputs')}</h3>
         <table><caption className="sr-only">{t('credit.inputs')}</caption><thead><tr><th scope="col">{t('credit.input')}</th><th scope="col">{t('credit.value')}</th><th scope="col">{t('credit.source')}</th><th scope="col">{t('credit.asof')}</th></tr></thead>
           <tbody>{v.inputDefinitions.map((d) => { const x = v.inputs.find((i) => i.key === d.key); return (
-            <tr key={d.key}><th scope="row">{label(d.label)}</th><td>{x ? x.value : <Tag tone="warn" icon="?">{t('credit.m.missing')}</Tag>}</td><td>{x ? t(`credit.src.${x.source}`) : '—'}{x?.conflict ? <> <Tag tone="danger" icon="!">{t('credit.m.conflict')}</Tag></> : null}</td><td>{x?.asOf ?? '—'}</td></tr>); })}</tbody></table>
+            <tr key={d.key}><th scope="row">{label(d.label)}{d.scope === 'party' && <div className="hint">{t('credit.perparty')}: {d.aggregate}</div>}</th><td>{x ? x.value : <Tag tone="warn" icon="?">{t('credit.m.missing')}</Tag>}</td><td>{x ? t(`credit.src.${x.source}`) : '—'}{d.scope === 'party' ? <ul className="hint">{v.partyInputs.filter((pi) => pi.key === d.key).map((pi) => <li key={pi.partyId}>{v.parties.find((pp) => pp.partyId === pi.partyId)?.name ?? pi.role} ({pi.role.replace(/_/g, ' ')}): {pi.value ?? t('credit.m.missing')}{pi.conflict ? ` — ${t('credit.m.conflict')}` : ''}</li>)}</ul> : null}{x?.conflict ? <> <Tag tone="danger" icon="!">{t('credit.m.conflict')}</Tag></> : null}</td><td>{x?.asOf ?? '—'}</td></tr>); })}</tbody></table>
         {editable && <InputForm v={v} save={(b) => post('/inputs', b)} />}
       </section>
 
@@ -101,6 +101,13 @@ function Workspace({ caseId, v, canPrepare, act }: { caseId: string; v: CreditVi
         {v.parties.length === 0 ? <p>{t('credit.noparties')}</p> : <ul>{v.parties.map((p) => <li key={p.partyId}>{p.name} <span className="hint">({p.role.replace(/_/g, ' ')})</span></li>)}</ul>}
         {editable && <PartyForm save={(b) => post('/parties', b)} />}
       </section>
+
+      {(providers.length > 0 || v.externalChecks.length > 0) && (
+        <section aria-labelledby="cr-ex"><h3 id="cr-ex">{t('credit.external')}</h3>
+          <p className="hint">{t('credit.externalhelp')}</p>
+          {v.externalChecks.length === 0 ? <p>{t('credit.noexternal')}</p> : <ul>{v.externalChecks.map((c) => <li key={c.correlationId}>{c.provider} — {v.parties.find((p) => p.partyId === c.partyId)?.name ?? ''}: <strong>{t(`credit.xs.${c.status}`)}</strong>{c.resultRef ? ` (${c.resultRef})` : ''}{c.summary ? <span className="hint"> {Object.entries(c.summary).map(([k, x]) => `${k}: ${x}`).join(', ')}</span> : null}{c.errorCode ? <span className="hint"> ({c.errorCode})</span> : null}</li>)}</ul>}
+          {editable && providers.length > 0 && <ExternalForm providers={providers} v={v} save={(b) => post('/external-checks', b)} />}
+        </section>)}
 
       <section aria-labelledby="cr-rc"><h3 id="cr-rc">{t('credit.rec')}</h3>
         <p className="hint">{v.humanAndSystem}</p>
@@ -121,11 +128,13 @@ function Workspace({ caseId, v, canPrepare, act }: { caseId: string; v: CreditVi
 
 function InputForm({ v, save }: { v: CreditView; save: (b: object) => Promise<boolean> }) {
   const t = useT(); const loc = useLocale();
-  const [f, setF] = useState({ key: v.inputDefinitions[0]?.key ?? '', value: '', asOf: today(), source: 'staff_entered', evidenceNote: '' });
-  const submit = async (e: FormEvent) => { e.preventDefault(); if (await save(f)) setF({ ...f, value: '', evidenceNote: '' }); };
+  const [f, setF] = useState({ key: v.inputDefinitions[0]?.key ?? '', partyId: '', value: '', asOf: today(), source: 'staff_entered', evidenceNote: '' });
+  const def = v.inputDefinitions.find((d) => d.key === f.key); const counted = def?.scope === 'party' ? v.parties.filter((p) => def.partyRoles?.includes(p.role)) : [];
+  const submit = async (e: FormEvent) => { e.preventDefault(); if (await save({ ...f, partyId: def?.scope === 'party' ? (f.partyId || counted[0]?.partyId) : undefined })) setF({ ...f, value: '', evidenceNote: '' }); };
   return (
     <form onSubmit={submit} aria-label={t('credit.addinput')}>
       <div className="bbjp-field"><label htmlFor="in-key">{t('credit.input')}</label><select id="in-key" className="bbjp-select" value={f.key} onChange={(e) => setF({ ...f, key: e.target.value })}>{v.inputDefinitions.map((d) => <option key={d.key} value={d.key}>{d.label[loc]}</option>)}</select></div>
+      {def?.scope === 'party' && <div className="bbjp-field"><label htmlFor="in-party">{t('credit.forparty')}</label><select id="in-party" className="bbjp-select" value={f.partyId || counted[0]?.partyId || ''} onChange={(e) => setF({ ...f, partyId: e.target.value })}>{counted.map((p) => <option key={p.partyId} value={p.partyId}>{p.name} ({p.role.replace(/_/g, ' ')})</option>)}</select></div>}
       <TextField label={t('credit.value')} inputMode="decimal" value={f.value} onChange={(e) => setF({ ...f, value: e.target.value })} required />
       <TextField label={t('credit.asof')} type="date" value={f.asOf} max={today()} onChange={(e) => setF({ ...f, asOf: e.target.value })} required />
       <div className="bbjp-field"><label htmlFor="in-src">{t('credit.source')}</label><select id="in-src" className="bbjp-select" value={f.source} onChange={(e) => setF({ ...f, source: e.target.value })}>{SOURCES.map((s) => <option key={s} value={s}>{t(`credit.src.${s}`)}</option>)}</select></div>
@@ -147,6 +156,20 @@ function ChecklistRow({ item, label, editable, save }: { item: CreditView['check
           <Button type="submit" variant="secondary">{t('credit.saveanswer')} {label}</Button>
         </form>)}
     </li>
+  );
+}
+
+function ExternalForm({ providers, v, save }: { providers: string[]; v: CreditView; save: (b: object) => Promise<boolean> }) {
+  const t = useT(); const [f, setF] = useState({ provider: providers[0] ?? '', partyId: '', lawfulBasis: '', consentEvidence: '' });
+  if (!v.parties.length) return <p className="hint">{t('credit.needparty')}</p>;
+  return (
+    <form onSubmit={async (e) => { e.preventDefault(); if (await save({ ...f, partyId: f.partyId || v.parties[0]?.partyId })) setF({ ...f, lawfulBasis: '', consentEvidence: '' }); }} aria-label={t('credit.requestcheck')}>
+      <div className="bbjp-field"><label htmlFor="ex-p">{t('credit.provider')}</label><select id="ex-p" className="bbjp-select" value={f.provider} onChange={(e) => setF({ ...f, provider: e.target.value })}>{providers.map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
+      <div className="bbjp-field"><label htmlFor="ex-s">{t('credit.checkparty')}</label><select id="ex-s" className="bbjp-select" value={f.partyId || v.parties[0]?.partyId || ''} onChange={(e) => setF({ ...f, partyId: e.target.value })}>{v.parties.map((p) => <option key={p.partyId} value={p.partyId}>{p.name} ({p.role.replace(/_/g, ' ')})</option>)}</select></div>
+      <TextField label={t('credit.lawful')} value={f.lawfulBasis} onChange={(e) => setF({ ...f, lawfulBasis: e.target.value })} required />
+      <TextField label={t('credit.consent')} value={f.consentEvidence} onChange={(e) => setF({ ...f, consentEvidence: e.target.value })} required />
+      <Button type="submit" variant="secondary">{t('credit.requestcheck')}</Button>
+    </form>
   );
 }
 

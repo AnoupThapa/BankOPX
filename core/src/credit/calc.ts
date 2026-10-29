@@ -1,11 +1,15 @@
-import { add, cmp, DecimalError, Dec, div, formatDec, isDecimalText, mul, parseDec, sub } from './decimal';
+import { add, cmp, DecimalError, Dec, div, formatDec, isDecimalText, mul, parseDec, sub } from '../platform';
 
 // Calculation sets are configuration (CRD-02, CRD-03): the platform supplies a small, fixed expression language; the bank supplies the definitions and the worked
 // examples that prove them. The same engine version and the same inputs always give the same result.
 export const CALC_ENGINE_VERSION = 'calc-1';
 
 export type Expr = { ref: string } | { const: string } | { op: 'add' | 'sub' | 'mul' | 'div'; args: [Expr, Expr] };
-export interface InputDef { key: string; label: { en: string; ne: string }; unit: 'money' | 'count' | 'percent' | 'ratio'; required?: boolean; maxAgeDays?: number }
+export interface InputDef {
+  key: string; label: { en: string; ne: string }; unit: 'money' | 'count' | 'percent' | 'ratio'; required?: boolean; maxAgeDays?: number;
+  /** 'party' inputs are entered per party and combined by `aggregate` over `partyRoles` (see aggregate.ts). Worked examples give the combined figure. */
+  scope?: 'proposal' | 'party'; partyRoles?: string[]; aggregate?: 'sum' | 'max' | 'min';
+}
 export interface MeasureDef { key: string; label: { en: string; ne: string }; expr: Expr; decimals?: number }
 export interface WorkedExample { name: string; inputs: Record<string, string>; expected: Record<string, string> }
 export interface CalculationSet { name: string; owner: string; productClass: string; inputs: InputDef[]; measures: MeasureDef[]; workedExamples: WorkedExample[] }

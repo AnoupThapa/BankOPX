@@ -45,8 +45,8 @@ function DecisionPanel({ ws, task, done }: { ws: Workspace; task: WsTask; done: 
       const body: Record<string, unknown> = { outcome, rationale: rationale || undefined };
       if (outcome === 'complete') body.recommendation = recommendation;
       if (outcome === 'return') Object.assign(body, { reasonCode: reason, customerText, items: items.map((i) => ({ type: i.type, key: i.type === 'question' ? `q${items.indexOf(i) + 1}` : i.key, text: i.text })) });
-      await api.complete(task.taskId, body, key);
-      done(t('panel.done'));                       // the confirmation lives in the page, because this panel disappears once its task is finished
+      const r = await api.complete(task.taskId, body, key);
+      done(r.approvalsRequired && r.approvalsRecorded && r.approvalsRecorded < r.approvalsRequired ? `${t('panel.partial')} (${r.approvalsRecorded} / ${r.approvalsRequired})` : t('panel.done'));                       // the confirmation lives in the page, because this panel disappears once its task is finished
     } catch (err) { setMsg(err instanceof ApiError ? String(err.body.message ?? err.status) : t('common.error')); } finally { setBusy(false); }
   };
 
@@ -56,6 +56,7 @@ function DecisionPanel({ ws, task, done }: { ws: Workspace; task: WsTask; done: 
       {!e ? <p>{t('panel.none')}</p> : (<>
         <h4>{t('panel.checks')}</h4>
         <AuthorityChecks e={e} />
+        {e.approvals && e.approvals.required > 1 && <p className="status">{t('panel.approvals')}: {e.approvals.recorded} / {e.approvals.required}</p>}
         {!task.assigneeId && <Button variant="secondary" onClick={async () => { await api.claim(task.taskId); done(); }}>{t('panel.claim')}</Button>}
         <form onSubmit={submit}>
           <fieldset disabled={!canAct || busy} className="bbjp-group"><legend>{t('panel.outcome')}</legend>

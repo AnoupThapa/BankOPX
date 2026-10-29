@@ -15,7 +15,9 @@ export class CreditController {
   @Post('cases/:id/credit/parties') @HttpCode(201) @RequirePermission('credit.prepare')
   party(@Req() r: AuthedRequest, @Param('id') id: string, @Body() b: { role?: string; name?: string; note?: string }) { return this.svc.addParty(this.p(r), id, b); }
   @Post('cases/:id/credit/inputs') @HttpCode(201) @RequirePermission('credit.prepare')
-  input(@Req() r: AuthedRequest, @Param('id') id: string, @Body() b: { key?: string; value?: string; asOf?: string; source?: string; evidenceNote?: string }) { return this.svc.setInput(this.p(r), id, b); }
+  input(@Req() r: AuthedRequest, @Param('id') id: string, @Body() b: { key?: string; partyId?: string; value?: string; asOf?: string; source?: string; evidenceNote?: string }) { return this.svc.setInput(this.p(r), id, b); }
+  @Post('cases/:id/credit/external-checks') @HttpCode(201) @RequirePermission('credit.prepare')
+  externalCheck(@Req() r: AuthedRequest, @Param('id') id: string, @Body() b: { partyId?: string; provider?: string; lawfulBasis?: string; consentEvidence?: string }) { return this.svc.requestExternalCheck(this.p(r), id, b); }
   @Post('cases/:id/credit/assess') @HttpCode(200) @RequirePermission('credit.prepare')
   assess(@Req() r: AuthedRequest, @Param('id') id: string) { return this.svc.assess(this.p(r), id); }
   @Post('cases/:id/credit/checklist') @HttpCode(201) @RequirePermission('credit.prepare')
@@ -26,6 +28,16 @@ export class CreditController {
   condition(@Req() r: AuthedRequest, @Param('id') id: string, @Body() b: Parameters<CreditService['addCondition']>[3], @Headers('idempotency-key') ik?: string) { return this.svc.addCondition(this.p(r), id, ik, b); }
   @Post('cases/:id/credit/conditions/:cid/clear') @HttpCode(200) @RequirePermission('credit.condition_clear')
   clear(@Req() r: AuthedRequest, @Param('id') id: string, @Param('cid') cid: string, @Body() b: { note?: string }) { return this.svc.clearCondition(this.p(r), id, cid, b); }
+  @Get('credit/portfolio') @RequirePermission('credit.read')
+  portfolio(@Req() r: AuthedRequest) { return this.svc.portfolio(this.p(r)); }
   @Get('credit/conditions') @RequirePermission('credit.read')
   conditions(@Req() r: AuthedRequest, @Query('overdue') overdue?: string) { return this.svc.conditions(this.p(r), { overdue: overdue === 'true' }); }
+}
+
+@Controller('ops/credit')
+export class CreditOpsController {
+  constructor(private readonly svc: CreditService) {}
+  /** Run by the scheduler's integration identity: sends requested external checks and flags overdue conditions. */
+  @Post('run') @HttpCode(200) @RequirePermission('integration.invoke')
+  run(@Req() r: AuthedRequest) { return this.svc.runDue(r.session$!.principal.institutionId); }
 }

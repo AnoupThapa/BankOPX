@@ -15,3 +15,17 @@ Engineering threat model, not a certification.
 | C9 | Privilege creep through the approval-permission change | the approve and reject routes now rely on service-level checks; tests cover the general checker, maker, policy owner and auditor-style refusals | `credit.e2e`, `config.e2e` | Mitigated. |
 | C10 | Score used as a decision by habit | every display carries "system-generated ... not a decision"; the recommendation is a separate person-authored record | `staff.spec`, `credit.mjs` | Partial: it is a human-factors control |
 | C11 | Authority limits bypassed by splitting or understating the amount | the requested amount is read from the application at opening; the approval node checks the case's amount field; **splitting across cases is not detected** | `credit.e2e` (boundaries) | Partial. **Open:** aggregate exposure checks (A-039) |
+
+## Phase 6b additions
+| # | Threat | Mitigation | Evidence | Status |
+|---|---|---|---|---|
+| X1 | Personal data sent to a provider without basis (CRD-09) | lawful basis and consent evidence mandatory (service and database); only providers listed for the service; default port is "unavailable" | `credit.e2e` | Mitigated for the process controls. **Open:** whether the evidence text is true is a human matter; no link to a consent record |
+| X2 | Provider call inside a request, or sent twice | request only records; dispatcher claims under an advisory lock and writes a "sent" row first; a sent-without-result check is never re-sent | `credit.e2e` | Mitigated. A crash after "sent" leaves it visibly stuck; a new request is a human decision |
+| X3 | Report or subject details retained | only reference and bank-defined summary fields stored; provider error text replaced by a code; test checks rows and logs for the subject name | `credit.e2e` | Mitigated for the covered paths. **Open:** a real provider's summary fields could carry personal data; the bank must define them |
+| J1 | One person counted twice in a joint approval | distinct approvers enforced by an eligibility check and tested; each approver needs authority for the amount | `credit.e2e` | Mitigated |
+| J2 | Half approval acts as a full one | case state, hand-off and decision unchanged until the last approval; tested | `credit.e2e` | Mitigated |
+| J3 | Understated amount avoids a tier | amount comes from the application; unknown amount takes the highest tier; splitting across applications is not detected | `credit.e2e` | Partial (A-039) |
+| P1 | Per-party inputs hide a missing party | a counted party with no value leaves the figure missing; the oldest date wins | `credit.spec`, `credit.e2e` | Mitigated |
+| P2 | Portfolio view exposes identities | counts only; test checks for tracking codes and staff names | `credit.e2e`, `staff.spec` | Mitigated |
+| D1 | Credit definitions drafted in the admin page bypass checks | the page only drafts and submits through the normal configuration API; publication checks and credit policy owner approval apply | `admin.spec`, `credit.e2e` | Mitigated |
+

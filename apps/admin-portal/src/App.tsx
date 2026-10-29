@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button, LocaleProvider, TextField, useT } from '@bbjp/ui';
 import './admin.css';
 import { api } from './api';
+import { Definitions } from './definitions';
 import { Designer } from './designer';
 import { WorkflowDesigner } from './workflow-designer';
 import { EXTRA } from './messages';
@@ -11,7 +12,7 @@ export function App() { return <LocaleProvider locale="en" extra={EXTRA}><Shell 
 
 function Shell() {
   const t = useT();
-  const [me, setMe] = useState<string | null>(null); const [tab, setTab] = useState<'designer' | 'workflow' | 'review'>('designer');
+  const [me, setMe] = useState<string | null>(null); const [tab, setTab] = useState<'designer' | 'workflow' | 'defs' | 'review'>('designer');
   useEffect(() => { document.title = t('app.title'); }, [t]);
   if (!me) return <Login onDone={setMe} />;
   return (
@@ -21,11 +22,12 @@ function Shell() {
         <nav aria-label={t('app.title')}>
           <Button variant={tab === 'designer' ? 'primary' : 'secondary'} aria-pressed={tab === 'designer'} onClick={() => setTab('designer')}>{t('nav.designer')}</Button>
           <Button variant={tab === 'workflow' ? 'primary' : 'secondary'} aria-pressed={tab === 'workflow'} onClick={() => setTab('workflow')}>{t('nav.workflow')}</Button>
+          <Button variant={tab === 'defs' ? 'primary' : 'secondary'} aria-pressed={tab === 'defs'} onClick={() => setTab('defs')}>{t('nav.defs')}</Button>
           <Button variant={tab === 'review' ? 'primary' : 'secondary'} aria-pressed={tab === 'review'} onClick={() => setTab('review')}>{t('nav.review')}</Button>
           <Button variant="secondary" onClick={async () => { await api.logout().catch(() => undefined); setMe(null); }}>{t('nav.signout')}</Button>
         </nav>
       </header>
-      <main>{tab === 'designer' ? <Designer /> : tab === 'workflow' ? <WorkflowDesigner /> : <ReviewQueue me={me} />}</main>
+      <main>{tab === 'designer' ? <Designer /> : tab === 'workflow' ? <WorkflowDesigner /> : tab === 'defs' ? <Definitions /> : <ReviewQueue me={me} />}</main>
     </div>
   );
 }

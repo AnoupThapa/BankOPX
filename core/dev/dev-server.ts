@@ -19,7 +19,7 @@ import { migrate } from '../src/platform/migrate';
 import { AppLogger } from '../src/platform';
 import { EicarTestScanner, MalwareScanner } from '../src/document-evidence';
 import { CREDIT_REVIEW_WORKFLOW, PILOT_CERTIFICATE_WORKFLOW, REFERENCE_WORKFLOW } from '../src/workflow';
-import { DEMO_CALC_SET, DEMO_CHECKLIST, DEMO_PROPOSAL_TYPE, DEMO_SCORECARD } from '../src/credit';
+import { DEMO_CALC_SET, DEMO_CHECKLIST, DEMO_PROPOSAL_TYPE, DEMO_SCORECARD, ExternalCheckPort, ExternalCheckResult } from '../src/credit';
 import { LocalFsObjectStore, ObjectStore } from '../src/platform';
 import { mkdtempSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
@@ -42,7 +42,9 @@ async function main() {
   })();
   // Several demo records so repeated walkthroughs can each link a different profile (a core record can link to one profile only).
   for (let i = 0; i < 10; i++) core.records.set(`123456789${i}`, { ref: `CORE-DEMO-${i}`, branch: 'A', verify: { dob: '1990-01-01' }, accounts: [{ maskedAccount: `****789${i}`, type: 'savings' }] });
-  const mod = await Test.createTestingModule({ imports: [AppModule] }).overrideProvider(OtpDelivery).useValue(delivery).overrideProvider(CoreBankingPort).useValue(core)
+  // Development stand-in for an authorised external-check provider: returns invented summary fields. A real provider needs the bank's authorisation (CRD-09).
+  const devProvider = new (class extends ExternalCheckPort { async request(): Promise<ExternalCheckResult> { return { kind: 'received', resultRef: `DEV-${Date.now().toString(36)}`, summary: { band: 'B', open_facilities: '2' } }; } })();
+  const mod = await Test.createTestingModule({ imports: [AppModule] }).overrideProvider(ExternalCheckPort).useValue(devProvider).overrideProvider(OtpDelivery).useValue(delivery).overrideProvider(CoreBankingPort).useValue(core)
     // Local files and a test-string scanner: development only, so uploads can be tried without a bank storage or scanner product [BANK-DECIDES].
     .overrideProvider(ObjectStore).useValue(new LocalFsObjectStore(process.env.DEV_STORE_DIR ?? mkdtempSync(join(tmpdir(), 'bbjp-dev-store-'))))
     .overrideProvider(MalwareScanner).useValue(new EicarTestScanner()).compile();
@@ -57,7 +59,7 @@ async function main() {
       { name: 'maker', actor: 'admin', role: 'config_maker' }, { name: 'checker', actor: 'admin', role: 'config_checker', highRiskApproved: true },
       { name: 'officerA', actor: 'staff', role: 'branch_officer', branch: 'A' }, { name: 'officerA2', actor: 'staff', role: 'branch_officer', branch: 'A' },
       { name: 'compliance', actor: 'staff', role: 'compliance_officer', branch: 'A' }, { name: 'lead', actor: 'staff', role: 'team_lead', branch: 'A' },
-      { name: 'approverSmall', actor: 'staff', role: 'approver', branch: 'A', maxAmount: 50000 }, { name: 'approverBig', actor: 'staff', role: 'approver', branch: 'A', maxAmount: 10_000_000 },
+      { name: 'approverSmall', actor: 'staff', role: 'approver', branch: 'A', maxAmount: 50000 }, { name: 'approverBig', actor: 'staff', role: 'approver', branch: 'A', maxAmount: 10_000_000 }, { name: 'approverBig2', actor: 'staff', role: 'approver', branch: 'A', maxAmount: 10_000_000 },
       { name: 'policyowner', actor: 'admin', role: 'credit_policy_owner', highRiskApproved: true },
       { name: 'creditA', actor: 'staff', role: 'credit_officer', branch: 'A' }, { name: 'creditA2', actor: 'staff', role: 'credit_officer', branch: 'A' },
       { name: 'ops', actor: 'staff', role: 'operations_officer', branch: 'A' }, { name: 'sched', actor: 'integration', role: 'integration_service' },
@@ -114,6 +116,17 @@ async function main() {
       credit: { productClass: 'demo_term_loan', proposalTypeKeys: ['type_one'], checklistKey: 'demo-checklist', calculationSetKey: 'demo-calc', scorecardKey: 'demo-score', amountField: 'amount', tenorField: 'tenor', purposeField: 'purpose', currency: 'NPR' },
       fulfilment: { connector: 'controlled-handoff', operation: 'book_facility' },
       title: loc('Business loan (demo)', 'व्यापार ऋण (डेमो)'), description: loc('Apply for a business loan. A credit officer prepares the review and an approver decides.', 'व्यापार ऋणका लागि आवेदन दिनुहोस्। ऋण अधिकृतले समीक्षा तयार गर्छन् र स्वीकृतकर्ताले निर्णय गर्छन्।'),
+      whoCanApply: loc('Existing customers (demo).', 'वर्तमान ग्राहक (डेमो)।'), fees: loc('Fees shown at offer stage (demo)', 'प्रस्ताव चरणमा शुल्क देखाइन्छ (डेमो)'), supportChannel: loc('Visit any branch (demo)', 'कुनै पनि शाखामा जानुहोस् (डेमो)'),
+      visitReason: loc('The bank may ask to see original documents in a branch.', 'बैंकले शाखामा मूल कागजात हेर्न माग्न सक्छ।') });
+    // Phase 6b demo: per-party income, joint approval above a threshold, one demo external-check provider. Synthetic, like the rest.
+    const joint = CREDIT_REVIEW_WORKFLOW(); (joint.nodes.approval as { jointApproval?: unknown }).jointApproval = [{ aboveAmount: '1000000', approvals: 2 }];
+    await publish(maker, checker, 'workflow', 'credit-flow-joint', joint);
+    const partyCalc = DEMO_CALC_SET(); Object.assign(partyCalc.inputs[0]!, { scope: 'party', partyRoles: ['borrower', 'co_applicant'], aggregate: 'sum' });
+    await publish(maker, po, 'calculation_set', 'demo-calc-party', partyCalc);
+    await publish(maker, checker, 'service', 'business-loan-joint', { ...base, formKey: 'business-loan-form', workflowKey: 'credit-flow-joint', requiresExistingRelationship: true, remoteClass: 'remote_first_conditional', documents: ['A photo of your ID'],
+      credit: { productClass: 'demo_term_loan', proposalTypeKeys: ['type_one'], checklistKey: 'demo-checklist', calculationSetKey: 'demo-calc-party', scorecardKey: 'demo-score', externalChecks: ['bureau_demo'], amountField: 'amount', tenorField: 'tenor', purposeField: 'purpose', currency: 'NPR' },
+      fulfilment: { connector: 'controlled-handoff', operation: 'book_facility' },
+      title: loc('Business loan, joint approval (demo)', 'व्यापार ऋण, संयुक्त स्वीकृति (डेमो)'), description: loc('Demo of per-party income, an external check and two-approver approval above a threshold.', 'पार्टीअनुसार आम्दानी, बाह्य जाँच र सीमा माथि दुई स्वीकृतकर्ताको डेमो।'),
       whoCanApply: loc('Existing customers (demo).', 'वर्तमान ग्राहक (डेमो)।'), fees: loc('Fees shown at offer stage (demo)', 'प्रस्ताव चरणमा शुल्क देखाइन्छ (डेमो)'), supportChannel: loc('Visit any branch (demo)', 'कुनै पनि शाखामा जानुहोस् (डेमो)'),
       visitReason: loc('The bank may ask to see original documents in a branch.', 'बैंकले शाखामा मूल कागजात हेर्न माग्न सक्छ।') });
     process.stdout.write('[dev] seeded demo institution\n');
