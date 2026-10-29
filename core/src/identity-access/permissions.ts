@@ -11,6 +11,7 @@ export const PERMISSIONS = [
   'customer.lookup', 'application.write', 'application.read', 'document.read',
   'case.clear', 'case.assign', 'workflow.read', 'tat.read',
   'integration.operate', 'pilot.read', 'pilot.baseline',
+  'credit.read', 'credit.prepare', 'credit.condition_clear', 'config.approve_credit',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -26,13 +27,17 @@ export interface RoleDef {
 
 export const ROLES: Record<string, RoleDef> = {
   branch_officer: { permissions: ['case.read', 'case.review', 'customer.lookup', 'document.read', 'tat.read'], actorTypes: ['staff'], scoped: ['case.read', 'case.review', 'customer.lookup', 'document.read', 'tat.read'], highRisk: false },
-  approver: { permissions: ['case.read', 'case.approve', 'document.read', 'tat.read'], actorTypes: ['staff'], scoped: ['case.read', 'case.approve', 'document.read', 'tat.read'], highRisk: false },
+  approver: { permissions: ['case.read', 'case.approve', 'document.read', 'tat.read', 'credit.read'], actorTypes: ['staff'], scoped: ['case.read', 'case.approve', 'document.read', 'tat.read', 'credit.read'], highRisk: false },
   // Compliance and legal clearances: a separate duty from branch review (WFL-02).
   compliance_officer: { permissions: ['case.read', 'case.clear', 'document.read'], actorTypes: ['staff'], scoped: ['case.read', 'case.clear', 'document.read'], highRisk: false },
   // Team leads assign and reassign work inside their branches; they do not decide (DEC-02).
-  team_lead: { permissions: ['case.read', 'case.review', 'case.assign', 'document.read', 'tat.read'], actorTypes: ['staff'], scoped: ['case.read', 'case.review', 'case.assign', 'document.read', 'tat.read'], highRisk: false },
+  team_lead: { permissions: ['case.read', 'case.review', 'case.assign', 'document.read', 'tat.read', 'credit.read'], actorTypes: ['staff'], scoped: ['case.read', 'case.review', 'case.assign', 'document.read', 'tat.read', 'credit.read'], highRisk: false },
   // Operations: watch, resolve and retry hand-offs to the bank's systems and enter pilot baselines. Cannot review, approve or configure (DEC-02, SEC-11).
   operations_officer: { permissions: ['integration.operate', 'pilot.read', 'pilot.baseline', 'tat.read'], actorTypes: ['staff'], scoped: ['integration.operate', 'pilot.read', 'tat.read'], highRisk: false },
+  // Credit officers prepare the proposal: inputs, calculations, checklist, recommendation, conditions. They do not approve (DEC-02).
+  credit_officer: { permissions: ['case.read', 'case.review', 'document.read', 'tat.read', 'credit.read', 'credit.prepare', 'credit.condition_clear'], actorTypes: ['staff'], scoped: ['case.read', 'case.review', 'document.read', 'tat.read', 'credit.read', 'credit.prepare', 'credit.condition_clear'], highRisk: false },
+  // The credit policy owner approves checklists, calculation sets, scorecards and proposal types (CRD-08). A different person from the maker (CFG-01).
+  credit_policy_owner: { permissions: ['config.approve_credit', 'config.read'], actorTypes: ['admin'], scoped: [], highRisk: true },
   config_maker: { permissions: ['config.draft', 'config.submit', 'config.read', 'workflow.read'], actorTypes: ['admin'], scoped: [], highRisk: false },
   config_checker: { permissions: ['config.approve', 'config.disable', 'config.read', 'workflow.read'], actorTypes: ['admin'], scoped: [], highRisk: true },
   security_admin: { permissions: ['admin.role.grant', 'admin.role.approve', 'admin.delegation.create'], actorTypes: ['admin'], scoped: [], highRisk: true },

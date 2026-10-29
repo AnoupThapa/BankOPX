@@ -28,6 +28,12 @@ export const serviceValidator: ConfigValidator = (kind, c) => {
     const ok = (v: unknown) => typeof v === 'string' && /^[a-z0-9_.-]{1,64}$/.test(v);
     if (!f || typeof f !== 'object' || !ok(f.connector) || !ok(f.operation)) e.push('INT-01: fulfilment needs a connector and an operation name');
   }
+  if (c.credit !== undefined) {
+    const k = c.credit as Record<string, unknown>; const key = (v: unknown) => typeof v === 'string' && /^[a-z0-9_.-]{1,64}$/.test(v);
+    if (!k || typeof k !== 'object' || !key(k.productClass) || !key(k.checklistKey) || !key(k.calculationSetKey) || !key(k.amountField)
+        || (k.scorecardKey !== undefined && !key(k.scorecardKey)) || (k.tenorField !== undefined && !key(k.tenorField)) || (k.purposeField !== undefined && !key(k.purposeField))
+        || typeof k.currency !== 'string' || !/^[A-Z]{3}$/.test(k.currency)) e.push('CRD-07: credit needs productClass, checklistKey, calculationSetKey, amountField and a currency');
+  }
   const a = c.availability as Record<string, unknown> | undefined;
   for (const k of ['channels', 'branches', 'currencies', 'segments']) if (!a || !isStringArray(a[k])) e.push(`SVC-06: availability.${k} must list values or ['*']`);
   return { ok: e.length === 0, errors: e };

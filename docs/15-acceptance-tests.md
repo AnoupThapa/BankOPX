@@ -455,6 +455,52 @@ Scenario: Pilot scope is approved before live use
 
 ---
 
+## L. Credit review workspace (Phase 6a)
+
+Written after the first implementation pass of the calculation engine and before the API was finished; the scenarios below are what `core/test/credit.e2e.spec.ts`, `core/src/credit/credit.spec.ts` and `apps/customer-portal/e2e/credit.mjs` check.
+
+```gherkin
+Scenario: Credit definitions are approved by the credit policy owner   # [CRD-08, CFG-01]
+  When a maker submits a scorecard, checklist, calculation set or proposal type
+  Then the general checker and the maker cannot approve it
+  And only the credit policy owner can, and cannot approve other kinds
+
+Scenario: Calculations carry their proof   # [CRD-03]
+  When a calculation set is published without a worked example for every measure, or an example does not reproduce exactly
+  Then publication is blocked and the error names the example
+
+Scenario: One scorecard, one product class   # [CRD-07]
+  When a scorecard lists several product classes or a wildcard, or a service points to definitions of another class
+  Then it cannot be published or a proposal cannot be opened
+
+Scenario: Missing data is never invented   # [CRD-04]
+  When a required input is absent, stale or contested
+  Then the measure says so, the score goes to manual review with no number, and a person must resolve it with a note
+
+Scenario: The system never decides   # [CRD-01, CRD-06, DEC-02]
+  When a recommendation is recorded, even "do not support"
+  Then the case state, decisions and hand-offs are unchanged
+  And the recommendation, a score override and the system score are stored separately
+  And only an authorised approver, within their limit (boundary amounts tested), decides in the approval step
+
+Scenario: A recommendation rests on a complete, current file   # [CRD-08]
+  When required checklist items are unanswered or inputs changed since the last run
+  Then the recommendation is refused
+
+Scenario: Conditions   # [APR-06]
+  When a condition is set before approval
+  Then it can be cleared only after approval, with evidence, by a different person than the one who set it, and only once
+  And overdue conditions are listed
+
+Scenario: Open proposals do not change under their feet   # [WFL-07]
+  When a new scorecard version is published
+  Then proposals already opened keep the version they started on
+
+Scenario: Credit data stays private   # [SEC-03, SEC-02]
+  Then party names and purpose are encrypted at rest, appear in no log or audit detail, and are visible only to credit.read holders in the branch
+  And the customer sees none of the credit file
+```
+
 ## K. Phase exit-gate checklists
 
 ### Phase 1 — Architecture, security foundation

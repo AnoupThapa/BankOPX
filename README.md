@@ -155,3 +155,7 @@ NODE_PATH=$(npm root -g) DEV_LOG=<dev server log> DEV_SECRETS_FILE=/tmp/bbjp-dev
 ```
 
 The dev seed includes the `ops` login (operations officer) and the pilot service `certificate-request`, whose hand-off uses the controlled hand-off (a person records the bank's reference). Set `BBJP_SCHEDULER=1` to run escalation and dispatch on a timer; otherwise call `POST /ops/integration/dispatch` as the integration identity. Pilot documents: `docs/phase-5/`.
+
+### Credit review workspace (Phase 6a)
+
+The dev seed adds the synthetic `business-loan` service and the logins `creditA`, `creditA2` (credit officers), `policyowner` (credit policy owner) and `approverBig`. All credit definitions in the seed are invented demo values. Browser walkthrough: `node apps/customer-portal/e2e/credit.mjs` (same variables as the other scripts). What a bank must supply: `docs/phase-6/bank-inputs-needed.md`.

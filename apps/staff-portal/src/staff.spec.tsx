@@ -4,13 +4,14 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { vi } from 'vitest';
 import { LocaleProvider } from '@bbjp/ui';
+import { CreditPanel } from './credit';
 import { Handoffs } from './operations';
 import { PilotPage } from './pilot';
 import { Queue } from './queue';
 import { duration } from './format';
 import { EXTRA } from './messages';
 import { CaseWorkspace, changedKeys } from './workspace';
-import type { HandoffDetail, HandoffRow, PilotMetrics, TaskRow, Workspace } from './api';
+import type { CreditStatus, CreditView, HandoffDetail, HandoffRow, PilotMetrics, TaskRow, Workspace } from './api';
 
 const wrap = (ui: React.ReactElement) => render(<LocaleProvider locale="en" extra={EXTRA}><main>{ui}</main></LocaleProvider>);
 const json = (v: unknown) => new Response(JSON.stringify(v), { status: 200 });
@@ -21,7 +22,7 @@ describe('staff portal', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('every t(...) key used in the source exists', () => {
-    const src = ['App.tsx', 'queue.tsx', 'workspace.tsx', 'tat.tsx', 'operations.tsx', 'pilot.tsx'].map((f) => readFileSync(join(process.cwd(), 'src', f), 'utf8')).join('\n');
+    const src = ['App.tsx', 'queue.tsx', 'workspace.tsx', 'tat.tsx', 'operations.tsx', 'pilot.tsx', 'credit.tsx', 'cases.tsx'].map((f) => readFileSync(join(process.cwd(), 'src', f), 'utf8')).join('\n');
     const keys = [...src.matchAll(/\bt\('([a-z_.]+)'\)/g)].map((m) => m[1]!);
     const shared = ['status.', 'priority.', 'internal.', 'field.', 'button.', 'form.', 'timeline.'];
     for (const k of keys) expect(k in EXTRA.en || shared.some((p) => k.startsWith(p))).toBe(true);
@@ -155,4 +156,82 @@ describe('staff portal', () => {
     for (const k of ['visits_per_request', 'end_to_end_tat_hours', 'resubmission_rate', 'handling_minutes']) expect(`pilot.metric.${k}` in EXTRA.en).toBe(true);
     for (const k of ['ambiguous_requires_resolution', 'not_retryable_in_this_state', 'note_required', 'external_reference_required']) expect(`err.${k}` in EXTRA.en).toBe(true);
   });
+
+  const L = (en: string) => ({ en, ne: `${en} (ne)` });
+  const cview = (over: Partial<CreditView> = {}): CreditView => ({
+    proposalId: 'p1', trackingCode: 'BB-AAAAA-BBBBB', productClass: 'demo', proposalType: L('Type one'), pinned: { checklist: 1, calculationSet: 1, scorecard: 1 },
+    facility: { requestedAmount: '500000', currency: 'NPR', tenorMonths: 36, purpose: 'Mill' }, caseState: 'in_review', parties: [{ partyId: 'x', role: 'guarantor', name: 'Sita Synthetic', note: null }],
+    inputDefinitions: [{ key: 'income', label: L('Annual income'), unit: 'money' }, { key: 'obligations', label: L('Annual obligations'), unit: 'money' }], measureDefinitions: [{ key: 'coverage', label: L('Coverage') }],
+    inputs: [{ key: 'income', value: '1200000', asOf: '2026-05-01', source: 'document', conflict: true }],
+    assessment: { calculation: { ranAt: '2026-06-01T00:00:00Z', measures: [{ key: 'coverage', status: 'missing', missing: ['obligations'] }] },
+      score: { status: 'manual_review', score: null, displayLabel: 'System-generated; informational. Not a decision.', scorecard: { name: 'Demo card', label: 'informational', effectiveDate: '2026-01-01' }, missing: ['coverage'], reviewAction: null,
+        factors: [{ key: 'coverage', group: 'repayment_capacity', label: L('Coverage'), weight: '0.6', value: null, points: null, state: 'missing_referred', reason: 'missing' }] }, outdated: true, label: 'System-generated figures support the review. They are not a decision and not a recommendation.' },
+    checklist: { name: 'Demo checklist', items: [{ key: 'identity_kyc', label: L('Identity complete'), required: true, answer: null, note: null }], requiredUnanswered: ['identity_kyc'], notMet: [] },
+    recommendation: null, conditions: [{ conditionId: 'c1', kind: 'pre_disbursement', text: 'Insurance', evidenceRequirement: 'Policy copy', dueDate: '2020-01-01', status: 'open', overdue: true }], humanAndSystem: 'The recommendation is a person\'s judgement.', ...over });
+  const creditFetch = (st: Partial<CreditStatus>, view: CreditView | null) => vi.stubGlobal('fetch', vi.fn(async (url: string) => (String(url).endsWith('/credit/status') ? json({ enabled: true, exists: !!view, canPrepare: true, proposalTypes: [{ key: 'type_one', label: L('Type one') }], ...st }) : json(view))));
+
+  it('CRD-01, CRD-04, CRD-06, CRD-10: the credit panel labels system figures, shows missing data and "manual review" with no score, and offers no approve or decline', async () => {
+    creditFetch({}, cview());
+    const { container } = wrap(<CreditPanel caseId="c1" />);
+    await screen.findByRole('heading', { name: 'Credit review' });
+    expect(screen.getByText(/does not approve or decline anything/)).toBeInTheDocument();
+    expect(screen.getByText(/They are not a decision and not a recommendation/)).toBeInTheDocument();
+    expect(screen.getByText(/System-generated; informational\. Not a decision\./)).toBeInTheDocument();
+    expect(screen.getByText('Manual review needed: no score')).toBeInTheDocument();
+    expect(screen.getByText(/Missing: obligations/)).toBeInTheDocument();
+    expect(screen.getByText(/Missing, referred to a person/)).toBeInTheDocument();
+    expect(screen.getByText(/Inputs have changed since these figures were produced/)).toBeInTheDocument();
+    expect(screen.getByText('Sources disagree')).toBeInTheDocument();
+    expect(screen.getByText('Overdue')).toBeInTheDocument();
+    expect(screen.getByText(/Sita Synthetic/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^(approve|decline)/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: /approve|decline/i })).not.toBeInTheDocument();
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('a person without prepare rights sees the figures but no entry forms; an unopened proposal offers the offered types only to those who may open it; services without credit show nothing', async () => {
+    creditFetch({ canPrepare: false }, cview());
+    const a = wrap(<CreditPanel caseId="c1" />);
+    await screen.findByRole('heading', { name: 'Credit review' });
+    expect(screen.queryByRole('button', { name: 'Run calculations and score' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Record recommendation' })).not.toBeInTheDocument();
+    a.unmount();
+    creditFetch({}, null);
+    const b = wrap(<CreditPanel caseId="c1" />);
+    expect(await screen.findByRole('button', { name: 'Open credit proposal' })).toBeInTheDocument();
+    b.unmount();
+    creditFetch({ canPrepare: false }, null);
+    const c = wrap(<CreditPanel caseId="c1" />);
+    await screen.findByText(/No credit proposal has been opened/);
+    expect(screen.queryByRole('button', { name: 'Open credit proposal' })).not.toBeInTheDocument();
+    c.unmount();
+    creditFetch({ enabled: false }, null);
+    const d = wrap(<CreditPanel caseId="c1" />);
+    await waitFor(() => expect(d.container.textContent).toBe(''));
+  });
+
+  it('the recommendation vocabulary is support, support with conditions, do not support only; a recorded recommendation is shown as a person\'s judgement', async () => {
+    creditFetch({}, cview({ recommendation: { recommendation: 'support_with_conditions', rationale: 'Adequate capacity', exceptions: 'Tenor', mitigants: 'Security', concerns: null, scoreOverride: { reason: 'Seasonal income', higherApprovalRequired: true }, at: '2026-06-01T00:00:00Z' } }));
+    wrap(<CreditPanel caseId="c1" />);
+    await screen.findByText('Adequate capacity');
+    const select = screen.getByRole('combobox', { name: 'Recommendation (a person\'s judgement)' }) as HTMLSelectElement;
+    expect([...select.options].map((o) => o.text)).toEqual(['Support', 'Support with conditions', 'Do not support']);
+    expect(screen.getByText(/Departs from the system score: Seasonal income — higher approval required/)).toBeInTheDocument();
+  });
+
+  it('server refusals appear in plain words', async () => {
+    const view = cview();
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return new Response(JSON.stringify({ message: 'checklist_incomplete' }), { status: 409 });
+      return String(url).endsWith('/credit/status') ? json({ enabled: true, exists: true, canPrepare: true, proposalTypes: [] }) : json(view);
+    }));
+    wrap(<CreditPanel caseId="c1" />);
+    await screen.findByRole('button', { name: 'Record recommendation' });
+    const r = screen.getByLabelText('Rationale') as HTMLInputElement;
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.change(r, { target: { value: 'ok' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Record recommendation' }));
+    expect(await screen.findByText('Answer every required checklist item first.')).toBeInTheDocument();
+  });
 });
+

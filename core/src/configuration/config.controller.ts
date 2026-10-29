@@ -13,9 +13,9 @@ export class ConfigController {
   }
   @Post('versions/:id/submit') @RequirePermission('config.submit')
   submit(@Req() req: AuthedRequest, @Param('id') id: string, @Body() b: { reason: string }) { return this.cfg.submit(this.p(req), id, b.reason); }
-  @Post('versions/:id/approve') @RequirePermission('config.approve')
+  @Post('versions/:id/approve') @RequirePermission('config.read')   // the service decides which approval permission the kind needs
   approve(@Req() req: AuthedRequest, @Param('id') id: string, @Body() b: { reason: string }) { return this.cfg.approve(this.p(req), id, b.reason); }
-  @Post('versions/:id/reject') @RequirePermission('config.approve')
+  @Post('versions/:id/reject') @RequirePermission('config.read')
   reject(@Req() req: AuthedRequest, @Param('id') id: string, @Body() b: { reason: string }) { return this.cfg.reject(this.p(req), id, b.reason); }
   @Post('definitions/:id/rollback') @RequirePermission('config.draft')
   rollback(@Req() req: AuthedRequest, @Param('id') id: string, @Body() b: { toVersion: number; reason: string }) { return this.cfg.rollback(this.p(req), id, b.toVersion, b.reason); }

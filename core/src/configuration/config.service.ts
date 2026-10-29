@@ -18,6 +18,10 @@ function diff(prev: Record<string, unknown> | undefined, next: Record<string, un
 export interface VersionView { id: string; definitionId: string; version: number; status: string; contentHash: string; makerId: string; checkerId: string | null }
 
 /** Versioned, immutable configuration with maker-checker (ADR-005, CFG-01..08, FRM-03, WFL-07). */
+/** Credit configuration is approved by the credit policy owner, not by the general checker (CRD-08). */
+const CREDIT_CONFIG_KINDS = ['proposal_type', 'checklist', 'calculation_set', 'scorecard'];
+const approvalPermission = (kind: string) => (CREDIT_CONFIG_KINDS.includes(kind) ? 'config.approve_credit' as const : 'config.approve' as const);
+
 @Injectable()
 export class ConfigService {
   private impact: ImpactProvider = async () => 0;
@@ -78,7 +82,7 @@ export class ConfigService {
   async approve(p: Principal, versionId: string, reason: string, effectiveFrom?: Date) {
     return this.db.withTenant(p.institutionId, async (tx) => {
       const v = await this.load(tx, versionId);
-      await this.access.authorize(p, 'config.approve', { institutionId: p.institutionId, makerId: v.maker_id });
+      await this.access.authorize(p, approvalPermission(v.kind), { institutionId: p.institutionId, makerId: v.maker_id });
       if (v.status !== 'in_review') throw new ConflictException(`cannot approve from ${v.status}`);
       const res = this.validators.run(v.kind, v.content);
       if (!res.ok) throw new BadRequestException({ message: 'validation failed', errors: res.errors });
@@ -91,9 +95,9 @@ export class ConfigService {
   }
 
   async reject(p: Principal, versionId: string, reason: string) {
-    await this.access.authorize(p, 'config.approve', { institutionId: p.institutionId });
     return this.db.withTenant(p.institutionId, async (tx) => {
       const v = await this.load(tx, versionId);
+      await this.access.authorize(p, approvalPermission(v.kind), { institutionId: p.institutionId });
       if (v.status !== 'in_review') throw new ConflictException(`cannot reject from ${v.status}`);
       await tx.query(`UPDATE config_version SET status='draft' WHERE id=$1`, [versionId]);
       await this.record(tx, p, v.definition_id, versionId, 'rejected', reason);

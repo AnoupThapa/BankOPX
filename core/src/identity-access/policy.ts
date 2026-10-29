@@ -61,7 +61,7 @@ export function decide(p: Principal, permission: Permission, r: Resource, now: D
   if (p.actorType === 'auditor' && !isReadPermission(permission)) return deny('auditor_read_only');     // SEC-11
 
   // Maker-checker / self-approval separation (APR-01, APR-02, CFG-01)
-  if (permission === 'config.approve' && r.makerId === p.userId) return deny('maker_cannot_approve');
+  if ((permission === 'config.approve' || permission === 'config.approve_credit') && r.makerId === p.userId) return deny('maker_cannot_approve');
   if (permission === 'case.approve' && r.applicantId === p.userId) return deny('applicant_cannot_approve');
 
   type Grant = { role: string; branchIds: string[]; departments: string[]; products: string[]; maxAmount: number | null };
