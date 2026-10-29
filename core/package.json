@@ -10,7 +10,8 @@
     "migrate:down": "ts-node src/platform/migrate-cli.ts down",
     "lint": "eslint src test --max-warnings 0",
     "typecheck": "tsc --noEmit",
-    "test": "jest --runInBand"
+    "test": "jest --runInBand",
+    "dev:server": "ts-node dev/dev-server.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11",

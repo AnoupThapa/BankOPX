@@ -140,6 +140,26 @@ export class ConfigService {
     });
   }
 
+  /** Published, enabled versions of one kind (used by the catalogue and consent notices). */
+  async listPublished(institutionId: string, kind: string): Promise<Array<{ id: string; key: string; version: number; contentHash: string; content: Record<string, unknown> }>> {
+    return this.db.withTenant(institutionId, async (tx) =>
+      (await tx.query(
+        `SELECT v.id, d.key, v.version, v.content_hash, v.content FROM config_version v JOIN config_definition d ON d.id=v.definition_id
+         WHERE d.kind=$1 AND d.disabled=false AND v.status='published' AND (v.effective_from IS NULL OR v.effective_from <= now()) ORDER BY d.key`, [kind])).rows
+        .map((r) => ({ id: r.id, key: r.key, version: r.version, contentHash: r.content_hash, content: r.content })));
+  }
+
+  /** A specific version that is currently published and enabled, or null (e.g. a retired notice cannot be consented to). */
+  async getPublishedById(institutionId: string, kind: string, id: string): Promise<{ id: string; key: string; contentHash: string; content: Record<string, unknown> } | null> {
+    if (!/^[0-9a-f-]{36}$/.test(id)) return null;
+    return this.db.withTenant(institutionId, async (tx) => {
+      const r = (await tx.query(
+        `SELECT v.id, d.key, v.content_hash, v.content FROM config_version v JOIN config_definition d ON d.id=v.definition_id
+         WHERE v.id=$1 AND d.kind=$2 AND d.disabled=false AND v.status='published'`, [id, kind])).rows[0];
+      return r ? { id: r.id, key: r.key, contentHash: r.content_hash, content: r.content } : null;
+    });
+  }
+
   async getVersion(p: Principal, id: string) {
     await this.access.authorize(p, 'config.read', { institutionId: p.institutionId });
     return this.db.withTenant(p.institutionId, async (tx) => {

@@ -1,0 +1,16 @@
+.portal { max-width: 640px; margin: 0 auto; padding: var(--bbjp-space-3); }
+.portal header { display: flex; flex-wrap: wrap; gap: var(--bbjp-space-2); align-items: center; justify-content: space-between; }
+.portal nav { display: flex; flex-wrap: wrap; gap: var(--bbjp-space-2); }
+.portal h1 { font-size: 1.5rem; margin: var(--bbjp-space-3) 0; }
+.portal h2 { font-size: 1.2rem; }
+.portal .card { border: 2px solid var(--bbjp-border); border-radius: var(--bbjp-radius); padding: var(--bbjp-space-3); margin-block: var(--bbjp-space-3); background: var(--bbjp-bg); }
+.portal .card button { margin-top: var(--bbjp-space-2); }
+.portal .check { display: flex; gap: var(--bbjp-space-2); align-items: flex-start; min-height: var(--bbjp-target); margin-block: var(--bbjp-space-3); }
+.portal .check input { width: 24px; height: 24px; margin-top: 2px; flex: none; }
+.portal .notice-body { background: var(--bbjp-surface); padding: var(--bbjp-space-3); border-radius: var(--bbjp-radius); }
+.portal .status { padding: var(--bbjp-space-2) var(--bbjp-space-3); border-left: 6px solid var(--bbjp-primary); background: var(--bbjp-surface); margin-block: var(--bbjp-space-3); }
+.portal dl { display: grid; gap: var(--bbjp-space-1); }
+.portal dt { font-weight: 600; }
+.portal dd { margin: 0 0 var(--bbjp-space-2); overflow-wrap: anywhere; }
+.portal textarea { width: 100%; min-height: 96px; font: inherit; border: 2px solid var(--bbjp-border); border-radius: var(--bbjp-radius); padding: var(--bbjp-space-2); box-sizing: border-box; }
+.portal a.btn-link { display: inline-flex; align-items: center; min-height: var(--bbjp-target); }

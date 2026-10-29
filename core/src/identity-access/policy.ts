@@ -107,3 +107,17 @@ export function validateDelegation(delegator: Assignment[], d: DelegationGrant, 
     (a.validTo === null || a.validTo >= d.validTo));
   return covers ? { allow: true, reason: 'ok' } : deny('exceeds_delegator_authority');
 }
+
+/**
+ * Coarse check used by the guard for scoped permissions: does the principal hold the permission through ANY live,
+ * valid grant, ignoring scope? Object-level scope is still enforced per object by `decide` (SEC-01, SEC-12).
+ */
+export function holdsPermission(p: Principal, permission: Permission, now: Date = new Date()): boolean {
+  if ((p.actorType === 'staff' || p.actorType === 'admin') && !p.mfaVerified) return false;
+  if (p.actorType === 'auditor' && !isReadPermission(permission)) return false;
+  const grants = [
+    ...p.assignments.filter((a) => live(a, now) && !(ROLES[a.role]?.highRisk && (!a.approvedBy || a.approvedBy === a.userId || a.approvedBy === a.grantedBy))).map((a) => a.role),
+    ...p.delegations.filter((d) => live(d, now)).map((d) => d.role),
+  ];
+  return grants.some((r) => ROLES[r]?.permissions.includes(permission) && ROLES[r]?.actorTypes.includes(p.actorType));
+}

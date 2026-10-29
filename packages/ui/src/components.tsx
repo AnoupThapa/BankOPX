@@ -24,6 +24,11 @@ export type CustomerStatus = 'received' | 'under_review' | 'more_info_needed' | 
 const TONE: Record<CustomerStatus, { tone: string; icon: string }> = {
   received: { tone: 'info', icon: '●' }, under_review: { tone: 'info', icon: '○' }, more_info_needed: { tone: 'warn', icon: '!' }, completed: { tone: 'ok', icon: '✓' },
 };
+/** Generic label chip: text plus icon, never colour alone. Not for case status (use StatusBadge, whose values are a controlled dictionary). */
+export function Tag({ tone = 'info', icon, children }: { tone?: 'ok' | 'warn' | 'danger' | 'info'; icon: string; children: ReactNode }) {
+  return <span className="bbjp-badge" data-tone={tone}><span aria-hidden="true">{icon}</span>{children}</span>;
+}
+
 /** Customer-facing status comes only from the controlled dictionary (STS-01/02, ADR-012): label + icon, never colour alone. */
 export function StatusBadge({ status }: { status: CustomerStatus }) {
   const t = useT();

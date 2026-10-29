@@ -86,9 +86,10 @@ describe('database integrity', () => {
     await owner.query(`CREATE DATABASE ${name}`);
     const url = process.env.MIGRATION_DATABASE_URL!.replace(/\/[^/]+$/, `/${name}`);
     try {
-      expect(await migrate(url, 'up')).toEqual(['0001_foundation']);
+      expect(await migrate(url, 'up')).toEqual(['0001_foundation', '0002_customer']);
+      expect(await migrate(url, 'down')).toEqual(['0002_customer']);
       expect(await migrate(url, 'down')).toEqual(['0001_foundation']);
-      expect(await migrate(url, 'up')).toEqual(['0001_foundation']);
+      expect(await migrate(url, 'up')).toEqual(['0001_foundation', '0002_customer']);
     } finally { await owner.query(`DROP DATABASE ${name}`); }
   });
 });

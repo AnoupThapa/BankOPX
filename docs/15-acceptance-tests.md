@@ -42,6 +42,43 @@ Scenario: Consent is not pre-ticked and marketing is separate   # [PRF-04, SIG-0
   And marketing consent is a separate optional control with its own record
 ```
 
+### A.2 Phase 2 additions (identity, profile, catalogue)
+
+```gherkin
+Scenario: OTP is single-use, short-lived and bound to its purpose   # [IDN-01, IDN-02]
+  Given a valid OTP challenge
+  Then the same code cannot be used twice, after expiry, on another challenge, or for a different purpose
+  And after the configured number of wrong attempts the challenge is dead even if the correct code is then entered
+
+Scenario: Customers cannot reach each other's data   # [SEC-02, PRF-01]
+  Given two signed-in customers
+  Then no endpoint accepts a profile id, and a step-up challenge issued to one cannot be completed by the other
+
+Scenario: Sensitive actions need a fresh step-up   # [IDN-06]
+  When a customer attempts to link, or to view authorised accounts, without a recent step-up
+  Then the request is refused with "step_up_required" and nothing is shown
+
+Scenario: Linking never reveals whether a record exists   # [IDN-03, IDN-04, IDN-05]
+  When the supplied details fail to match, or match a record already linked to another profile
+  Then the customer sees the same generic message in both cases
+  And the second case is audited for staff review
+  And repeated attempts are rate limited
+
+Scenario: Staff lookup is branch-scoped and gives no existence oracle   # [SEC-12, SEC-11]
+  When an officer looks up a customer outside their branch, or one that does not exist
+  Then both responses are identical (404) and both are audited
+
+Scenario: Service entries cannot be published incomplete   # [SVC-01, SVC-02, SVC-03, SVC-06, SVC-07, CFG-03]
+  When a service lacks a remote class, Nepali text, availability, or a visit reason where attendance may be needed
+  Then publication is blocked with the rule id
+  And every published service shown to a customer states that submission is not approval
+
+Scenario: Consent records are explicit and immutable   # [PRF-04]
+  When consent is sent without an explicit decision, or against a notice that is not currently published
+  Then it is rejected
+  And accepted records store notice version, hash, purpose, session and time and cannot be changed
+```
+
 ## B. Catalogue and visit transparency
 
 ```gherkin

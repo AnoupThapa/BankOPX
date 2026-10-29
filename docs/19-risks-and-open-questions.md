@@ -63,6 +63,11 @@ Add questions as they arise (Q21+). Close a question by recording the decision, 
 | A-005 | 2026-10-29 | Workflow-engine adopt-vs-build spike moves from Phase 1 to the start of Phase 4 | ADR-018 | Tech lead | Phase 4 | Open |
 | A-006 | 2026-10-29 | Nepali UI strings are placeholders until the bank supplies approved translations | ADR-019 | Product owner | Phase 2 | Open |
 | A-007 | 2026-10-29 | Staff-entered free-text reasons are stored in audit and must not contain personal data | SEC-03 | Product owner | Phase 4 training | Open |
+| A-008 | 2026-10-29 | OTP policy defaults (6 digits, 5 min, 5 attempts, 30 s resend, 5 per destination per hour, 30 per client per hour) are placeholders | IDN-01 | Security lead | Phase 2 gate | Open `[BANK-DECIDES]` |
+| A-009 | 2026-10-29 | API routes are unversioned for now; a `/v1` prefix is added to all routes in one change before any external consumer | docs/06 | Tech lead | Phase 3 | Open |
+| A-010 | 2026-10-29 | Linking requires a fresh OTP step-up plus an authoritative-record match on bank-defined attributes; the demo uses date of birth, which is **not** a policy decision | IDN-03, ADR-025 | Product owner, compliance | Phase 2 gate | Open `[BANK-DECIDES]` |
+| A-011 | 2026-10-29 | A customer's home branch is taken from the core record at link time and drives staff lookup scope | SEC-12 | Product owner | Phase 2 gate | Open |
+| A-012 | 2026-10-29 | Profile fields are limited to full name, date of birth, address, preferred name until forms (Phase 3) define the real data set | PRV-01 | Product owner | Phase 3 | Open |
 
 **Rule:** an assumption touching legal validity, KYC, AML, credit thresholds, approval limits, retention, residency, hosting or provider selection must be confirmed by the bank before production use.
 

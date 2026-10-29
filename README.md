@@ -125,3 +125,12 @@ npm run dev -w @bbjp/design-gallery   # UI component gallery
 ```
 
 Phase reports and evidence live in `docs/phase-1/`. New ADRs go in `adr/`.
+
+### Running the customer portal locally (Phase 2)
+
+```bash
+(cd core && npx ts-node dev/dev-server.ts)                 # API on :3100, fake OTP provider prints codes to this terminal
+(cd apps/customer-portal && npx vite --host 127.0.0.1)    # portal on :5173, proxies to the API
+```
+
+`core/dev/dev-server.ts` is for local development only: it refuses to run in production and uses a fake OTP provider and a fake core-banking record. Browser checks: `NODE_PATH=$(npm root -g) DEV_LOG=<dev server log> node apps/customer-portal/e2e/run.mjs` (needs Playwright).

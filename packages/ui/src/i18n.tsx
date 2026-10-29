@@ -37,12 +37,15 @@ export const MESSAGES: Record<Locale, Messages> = {
   },
 };
 
-const Ctx = createContext<Locale>('en');
-export const LocaleProvider = ({ locale, children }: { locale: Locale; children: ReactNode }) => <Ctx.Provider value={locale}>{children}</Ctx.Provider>;
+interface I18n { locale: Locale; extra?: Record<Locale, Messages> }
+const Ctx = createContext<I18n>({ locale: 'en' });
+/** `extra` lets an app add its own strings (en and ne) without forking the shared dictionary. */
+export const LocaleProvider = ({ locale, extra, children }: { locale: Locale; extra?: Record<Locale, Messages>; children: ReactNode }) => <Ctx.Provider value={{ locale, extra }}>{children}</Ctx.Provider>;
+export const useLocale = (): Locale => useContext(Ctx).locale;
 export function useT() {
-  const locale = useContext(Ctx);
+  const { locale, extra } = useContext(Ctx);
   return (key: string) => {
-    const m = MESSAGES[locale][key] ?? MESSAGES.en[key];
+    const m = extra?.[locale]?.[key] ?? MESSAGES[locale][key] ?? extra?.en?.[key] ?? MESSAGES.en[key];
     if (m === undefined) throw new Error(`missing i18n key: ${key}`);
     return m;
   };

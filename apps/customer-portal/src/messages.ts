@@ -1,0 +1,41 @@
+import type { Locale, Messages } from '@bbjp/ui';
+
+// All portal strings in English and Nepali (ADR-019). Nepali is a placeholder pending bank-approved translation (A-006).
+export const EXTRA: Record<Locale, Messages> = {
+  en: {
+    'app.title': 'Bank services', 'nav.services': 'Services', 'nav.home': 'My profile', 'lang.switch': 'नेपाली', 'nav.signout': 'Sign out',
+    'signin.title': 'Sign in or create your profile', 'signin.intro': 'We will send a one-time code to confirm you can receive messages on this number. This does not verify your identity.',
+    'signin.mobile': 'Mobile number', 'signin.send': 'Send code', 'signin.code': 'One-time code', 'signin.verify': 'Continue', 'signin.sent': 'If this number can receive messages, a code is on its way.',
+    'signin.error': 'That code did not work. Check it and try again, or request a new code.', 'signin.wait': 'Please wait a little before asking for another code.',
+    'consent.title': 'Your privacy choices', 'consent.required': 'Required: I have read this notice and agree to the processing described.', 'consent.marketing': 'Optional: I would like to receive offers.',
+    'consent.save': 'Save my choices', 'consent.needed': 'You need to agree to the required notice to apply for services.',
+    'home.title': 'Your profile', 'home.contact': 'Verified contact', 'home.notid': 'Your contact is verified. Your identity has not been verified yet.',
+    'home.link': 'Link my existing bank relationship', 'home.linked': 'Your bank relationship is linked.', 'home.services': 'Browse services',
+    'link.title': 'Link your bank relationship', 'link.stepup': 'For your security we will send a new code first.', 'link.account': 'Account number', 'link.dob': 'Date of birth (YYYY-MM-DD)',
+    'link.submit': 'Link', 'link.failed': 'We could not verify these details. Check them and try again.', 'link.ok': 'Linked.',
+    'catalogue.title': 'Services', 'catalogue.empty': 'No services are available right now.',
+    'service.who': 'Who can apply', 'service.fees': 'Fees', 'service.docs': 'Usual documents', 'service.support': 'Need help?', 'service.notapproval': 'Submitting a request is not an approval.',
+    'service.remote_capable': 'Fully online', 'service.remote_first_conditional': 'Online, a branch visit may be needed', 'service.attendance_required': 'A branch visit is required',
+    'service.visit': 'Why a visit may be needed', 'service.start': 'Start request', 'service.needlink': 'Link your bank relationship to start this service.',
+    'service.draft': 'Your saved progress', 'service.savedraft': 'Save and continue later', 'service.note': 'Note for this request', 'service.saved': 'Saved. You can continue later from any device.',
+    'common.back': 'Back', 'common.loading': 'Loading…', 'common.error': 'Something went wrong. Please try again.',
+  },
+  ne: {
+    'app.title': 'बैंक सेवाहरू', 'nav.services': 'सेवाहरू', 'nav.home': 'मेरो प्रोफाइल', 'lang.switch': 'English', 'nav.signout': 'साइन आउट',
+    'signin.title': 'साइन इन गर्नुहोस् वा प्रोफाइल बनाउनुहोस्', 'signin.intro': 'यो नम्बरमा सन्देश प्राप्त गर्न सक्नुहुन्छ भनी पुष्टि गर्न हामी एक पटकको कोड पठाउँछौं। यसले तपाईंको पहिचान प्रमाणित गर्दैन।',
+    'signin.mobile': 'मोबाइल नम्बर', 'signin.send': 'कोड पठाउनुहोस्', 'signin.code': 'एक पटकको कोड', 'signin.verify': 'जारी राख्नुहोस्', 'signin.sent': 'यो नम्बरमा सन्देश आउन सक्छ भने कोड पठाइँदैछ।',
+    'signin.error': 'त्यो कोड काम गरेन। जाँच गरी फेरि प्रयास गर्नुहोस् वा नयाँ कोड माग्नुहोस्।', 'signin.wait': 'अर्को कोड माग्नु अघि कृपया केही समय पर्खनुहोस्।',
+    'consent.title': 'तपाईंको गोपनीयता छनोट', 'consent.required': 'आवश्यक: मैले यो सूचना पढेको छु र वर्णन गरिएको प्रशोधनमा सहमत छु।', 'consent.marketing': 'ऐच्छिक: म अफरहरू प्राप्त गर्न चाहन्छु।',
+    'consent.save': 'मेरो छनोट सुरक्षित गर्नुहोस्', 'consent.needed': 'सेवाका लागि आवेदन दिन आवश्यक सूचनामा सहमत हुनुपर्छ।',
+    'home.title': 'तपाईंको प्रोफाइल', 'home.contact': 'प्रमाणित सम्पर्क', 'home.notid': 'तपाईंको सम्पर्क प्रमाणित भएको छ। तपाईंको पहिचान अझै प्रमाणित भएको छैन।',
+    'home.link': 'मेरो अवस्थित बैंक सम्बन्ध जोड्नुहोस्', 'home.linked': 'तपाईंको बैंक सम्बन्ध जोडिएको छ।', 'home.services': 'सेवाहरू हेर्नुहोस्',
+    'link.title': 'बैंक सम्बन्ध जोड्नुहोस्', 'link.stepup': 'तपाईंको सुरक्षाका लागि हामी पहिले नयाँ कोड पठाउँछौं।', 'link.account': 'खाता नम्बर', 'link.dob': 'जन्म मिति (YYYY-MM-DD)',
+    'link.submit': 'जोड्नुहोस्', 'link.failed': 'हामीले यी विवरण प्रमाणित गर्न सकेनौं। जाँच गरी फेरि प्रयास गर्नुहोस्।', 'link.ok': 'जोडियो।',
+    'catalogue.title': 'सेवाहरू', 'catalogue.empty': 'अहिले कुनै सेवा उपलब्ध छैन।',
+    'service.who': 'को आवेदन दिन सक्छ', 'service.fees': 'शुल्क', 'service.docs': 'सामान्यतया चाहिने कागजात', 'service.support': 'सहयोग चाहियो?', 'service.notapproval': 'अनुरोध बुझाउनु स्वीकृति होइन।',
+    'service.remote_capable': 'पूर्ण रूपमा अनलाइन', 'service.remote_first_conditional': 'अनलाइन, शाखामा जानुपर्ने हुन सक्छ', 'service.attendance_required': 'शाखामा जानु आवश्यक छ',
+    'service.visit': 'किन शाखामा जानुपर्ने हुन सक्छ', 'service.start': 'अनुरोध सुरु गर्नुहोस्', 'service.needlink': 'यो सेवा सुरु गर्न आफ्नो बैंक सम्बन्ध जोड्नुहोस्।',
+    'service.draft': 'तपाईंको सुरक्षित प्रगति', 'service.savedraft': 'सुरक्षित गरी पछि जारी राख्नुहोस्', 'service.note': 'यो अनुरोधका लागि टिप्पणी', 'service.saved': 'सुरक्षित भयो। तपाईं कुनै पनि उपकरणबाट पछि जारी राख्न सक्नुहुन्छ।',
+    'common.back': 'पछाडि', 'common.loading': 'लोड हुँदैछ…', 'common.error': 'केही गडबड भयो। कृपया फेरि प्रयास गर्नुहोस्।',
+  },
+};

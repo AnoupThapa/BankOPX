@@ -86,3 +86,15 @@ describe('policy decision point', () => {
     expect(decide(p, 'config.approve', { institutionId: INST, makerId: 'u2' }).allow).toBe(true);
   });
 });
+
+describe('holdsPermission (guard pre-check for scoped permissions)', () => {
+  const { holdsPermission } = jest.requireActual('./policy') as typeof import('./policy');
+  it('ignores scope but still honours identity type, MFA, expiry and revocation', () => {
+    expect(holdsPermission(base(), 'case.read')).toBe(true);
+    expect(holdsPermission(base({ mfaVerified: false }), 'case.read')).toBe(false);
+    expect(holdsPermission(base({ actorType: 'customer' }), 'case.read')).toBe(false);          // SEC-07
+    expect(holdsPermission(base({ assignments: [{ ...base().assignments[0]!, validTo: past }] }), 'case.read')).toBe(false);
+    expect(holdsPermission(base({ assignments: [{ ...base().assignments[0]!, revokedAt: new Date() }] }), 'case.read')).toBe(false);
+    expect(holdsPermission(base(), 'config.approve')).toBe(false);
+  });
+});
