@@ -18,6 +18,8 @@ export interface ApprovalNode extends Common {
   type: 'approval'; permission: 'case.approve'; queue: string; sla: Sla; escalation?: Escalation; canReturn?: boolean;
   /** Form field holding the amount the approver's authority limit is checked against. */
   amountField?: string;
+  /** The request has no monetary value (e.g. a certificate). Authority limits are then not applicable and the amount is treated as 0. Exclusive with amountField; reviewed by a checker like any config (APR-03). */
+  nonMonetary?: true;
   /** Nodes whose completers may not also decide (maker-checker, APR-02). */
   separateFrom?: string[];
   outcomes: { approve: string; decline: string };

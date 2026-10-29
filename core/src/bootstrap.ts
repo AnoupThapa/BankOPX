@@ -21,6 +21,7 @@ export function configureApp(app: INestApplication, logger: AppLogger = new AppL
   app.use('/customer/applications', rateLimit(Number(process.env.UPLOAD_ROUTE_RATE_MAX ?? 300), 60_000));
   app.use('/track', rateLimit(Number(process.env.TRACK_RATE_MAX ?? 30), 60_000));
   app.use('/customer/otp', rateLimit(Number(process.env.OTP_ROUTE_RATE_MAX ?? 60), 60_000));
+  app.use('/integration/callbacks', rateLimit(Number(process.env.CALLBACK_RATE_MAX ?? 120), 60_000));
   app.use('/auth/login', rateLimit(Number(process.env.LOGIN_RATE_MAX ?? 20), 60_000));
   app.useLogger(logger);
 }

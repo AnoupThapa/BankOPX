@@ -10,6 +10,7 @@ export const PERMISSIONS = [
   'self.read', 'profile.read', 'profile.write', 'consent.write', 'profile.link', 'draft.write', 'catalogue.read',
   'customer.lookup', 'application.write', 'application.read', 'document.read',
   'case.clear', 'case.assign', 'workflow.read', 'tat.read',
+  'integration.operate', 'pilot.read', 'pilot.baseline',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -30,6 +31,8 @@ export const ROLES: Record<string, RoleDef> = {
   compliance_officer: { permissions: ['case.read', 'case.clear', 'document.read'], actorTypes: ['staff'], scoped: ['case.read', 'case.clear', 'document.read'], highRisk: false },
   // Team leads assign and reassign work inside their branches; they do not decide (DEC-02).
   team_lead: { permissions: ['case.read', 'case.review', 'case.assign', 'document.read', 'tat.read'], actorTypes: ['staff'], scoped: ['case.read', 'case.review', 'case.assign', 'document.read', 'tat.read'], highRisk: false },
+  // Operations: watch, resolve and retry hand-offs to the bank's systems and enter pilot baselines. Cannot review, approve or configure (DEC-02, SEC-11).
+  operations_officer: { permissions: ['integration.operate', 'pilot.read', 'pilot.baseline', 'tat.read'], actorTypes: ['staff'], scoped: ['integration.operate', 'pilot.read', 'tat.read'], highRisk: false },
   config_maker: { permissions: ['config.draft', 'config.submit', 'config.read', 'workflow.read'], actorTypes: ['admin'], scoped: [], highRisk: false },
   config_checker: { permissions: ['config.approve', 'config.disable', 'config.read', 'workflow.read'], actorTypes: ['admin'], scoped: [], highRisk: true },
   security_admin: { permissions: ['admin.role.grant', 'admin.role.approve', 'admin.delegation.create'], actorTypes: ['admin'], scoped: [], highRisk: true },

@@ -145,3 +145,13 @@ NODE_PATH=$(npm root -g) DEV_LOG=<dev server log> DEV_SECRETS_FILE=/tmp/bbjp-dev
 ```
 
 The dev server uses a local-disk object store and a test-string malware scanner. Neither is a production control.
+
+### Staff portal, workflow and the pilot walkthrough (Phases 4 and 5)
+
+```bash
+(cd apps/staff-portal && npx vite --port 5175 --host 127.0.0.1)   # staff portal on :5175 (queue, workspace, turnaround, hand-offs, pilot)
+NODE_PATH=$(npm root -g) DEV_LOG=<dev server log> DEV_SECRETS_FILE=/tmp/bbjp-dev-secrets.json node apps/customer-portal/e2e/workflow.mjs   # Phase 4, fresh database
+NODE_PATH=$(npm root -g) DEV_LOG=<dev server log> DEV_SECRETS_FILE=/tmp/bbjp-dev-secrets.json node apps/customer-portal/e2e/pilot.mjs      # Phase 5
+```
+
+The dev seed includes the `ops` login (operations officer) and the pilot service `certificate-request`, whose hand-off uses the controlled hand-off (a person records the bank's reference). Set `BBJP_SCHEDULER=1` to run escalation and dispatch on a timer; otherwise call `POST /ops/integration/dispatch` as the integration identity. Pilot documents: `docs/phase-5/`.

@@ -58,6 +58,7 @@ export const workflowValidator: ConfigValidator = (kind, c) => {
       if (!has(a.outcomes?.approve) || (nodes[a.outcomes.approve]!.type !== 'end') || (nodes[a.outcomes.approve] as { outcome?: string }).outcome !== 'approved') e.push(`WFL-08: approval '${key}' must lead to an end node with outcome 'approved'`);
       if (!has(a.outcomes?.decline) || (nodes[a.outcomes.decline]!.type !== 'end') || (nodes[a.outcomes.decline] as { outcome?: string }).outcome !== 'declined') e.push(`WFL-08: approval '${key}' must lead to an end node with outcome 'declined'`);
       if (a.amountField !== undefined && !/^[a-z][a-z0-9_]{0,40}$/.test(a.amountField)) e.push(`APR-03: '${key}' amountField is invalid`);
+      if (a.nonMonetary !== undefined && (a.nonMonetary !== true || a.amountField !== undefined)) e.push(`APR-03: '${key}' is either non-monetary or has an amountField, not both`);
       for (const s of a.separateFrom ?? []) if (!has(s) || nodes[s]!.type !== 'task') e.push(`APR-02: '${key}' separateFrom '${s}' must be a task node`);
     } else if (n.type === 'end') {
       if (!['approved', 'declined'].includes(n.outcome)) e.push(`WFL-08: end '${key}' needs an outcome`);

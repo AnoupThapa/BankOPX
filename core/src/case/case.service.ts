@@ -346,6 +346,18 @@ export class CaseService {
     return { caseId, trackingCode: c.tracking_code, status: CUSTOMER_STATUS[c.internal_state as CaseState], timeline: out };
   }
 
+  /** Counts for pilot metrics over the viewer's branches (docs/20). Counts only; nothing identifies a customer or an employee (TAT-06). */
+  async pilotCounts(p: Principal, branchIds: string[], serviceKey?: string) {
+    if (!branchIds.length) return { submitted: 0, approved: 0, declined: 0, open: 0, returnedAtLeastOnce: 0 };
+    return this.db.withTenant(p.institutionId, async (tx) => (await tx.query(
+      `SELECT count(*)::int submitted,
+              count(*) FILTER (WHERE internal_state='approved')::int approved,
+              count(*) FILTER (WHERE internal_state='declined')::int declined,
+              count(*) FILTER (WHERE internal_state NOT IN ('approved','declined'))::int open,
+              count(*) FILTER (WHERE EXISTS (SELECT 1 FROM case_transition t WHERE t.case_id = app_case.id AND t.to_state='returned_to_customer'))::int "returnedAtLeastOnce"
+         FROM app_case WHERE branch_id = ANY($1::uuid[]) AND ($2::text IS NULL OR service_key=$2)`, [branchIds, serviceKey ?? null])).rows[0]);
+  }
+
   /** SUB-01: the tracking code is only a locator. The public answer is identical for real and invented codes. */
   publicTrack() { return { message: 'sign_in_to_view' }; }
   async findMineByCode(s: SessionInfo, code: string) {

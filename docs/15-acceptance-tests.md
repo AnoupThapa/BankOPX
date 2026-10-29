@@ -379,6 +379,48 @@ Scenario: Webhook authenticity and replay   # [INT-03]
   Then it is rejected and logged; a valid duplicate is processed idempotently
 ```
 
+### H.2 Phase 5 additions (controlled hand-off, fulfilment confirmation, pilot operations)
+
+```gherkin
+Scenario: Approval creates a hand-off in the same transaction   # [INT-02, ADR-017]
+  Given a service configured with a fulfilment connector
+  When an authorised approver records the final approval
+  Then the case is approved and exactly one hand-off request exists in "pending" with a random idempotency key and correlation ID
+  And a service without a fulfilment connector creates no hand-off
+
+Scenario: Approved is not completed   # [INT-01, INT-05]
+  Given a hand-off that is pending, sent, failed or ambiguous
+  Then the customer sees the decision but not "completed"
+  And no notification says the request is completed
+
+Scenario: Only an authoritative confirmation completes fulfilment   # [INT-01]
+  When the connector or a signed callback or an authorised bank operator confirms with an external reference
+  Then the hand-off is "confirmed", the customer sees "completed", and a TAT event and an audit event are written
+  And a second identical confirmation changes nothing
+
+Scenario: Timeouts are ambiguous and are not blindly re-sent   # [INT-04]
+  When the connector times out
+  Then the request is "ambiguous" and visible to operations
+  And a retry is refused until an operator has resolved it by status query or recorded decision
+  And a retry after resolution uses the same idempotency key
+
+Scenario: Bounded retries end in a dead letter   # [INT-03, INT-04]
+  When a definite failure repeats up to the attempt limit
+  Then the request is "dead_letter", visible to operations with its age, and never retried automatically again
+
+Scenario: Callbacks are authenticated   # [INT-03]
+  When a callback has a bad signature, a stale timestamp or an unknown correlation ID
+  Then it is rejected and audited without revealing whether the request exists
+
+Scenario: Operations screens are scoped and private   # [SEC-01, SEC-02, INT-06]
+  Then only holders of the integration-operations permission in the branch scope see requests
+  And no hand-off payload, event name or log line contains personal or account data
+
+Scenario: Pilot metrics come from events   # [TAT-01, §20 KPIs]
+  Then completed count, bank time and customer wait percentiles, resubmission rate and hand-off failure rate are computed from event history
+  And the baseline is entered by the bank with method, sample size and period, never invented by the platform
+```
+
 ## I. Security and privacy
 
 ```gherkin

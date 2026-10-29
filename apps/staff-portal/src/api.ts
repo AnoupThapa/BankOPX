@@ -30,6 +30,17 @@ export interface Dist { count: number; median: number | null; p90: number | null
 export interface Dashboard { meta: { asOf: string; source: string; owner: string; definitions: Record<string, string> }; cases: number; closedCases: number; bank: Dist; customerWait: Dist; elapsed: Dist;
   byStage: Record<string, { bank: Dist; customerWait: Dist }>; sla: Record<string, { finished: number; onTime: number; rate: number | null }>; openTasks: { total: number; overdue: number } }
 
+export interface HandoffRow { id: string; caseId: string; trackingCode: string; serviceKey: string; connector: string; operation: string; correlationId: string; status: string; attempts: number; externalRef: string | null; lastErrorCode: string | null; confirmedVia: string | null; confirmedAt: string | null; createdAt: string; ageSeconds: number }
+export interface HandoffDetail extends HandoffRow { events: Array<{ type: string; from: string | null; to: string | null; actor: string; errorCode: string | null; note: string | null; at: string }> }
+export interface HandoffHealth { byStatus: Record<string, Record<string, number>>; oldestPendingSeconds: number | null; stuckSent: number; stuckSentAfterHours?: number; asOf: string }
+export interface PilotMetrics {
+  asOf: string; serviceKey: string | null; definitions: Record<string, string>; comparison: string;
+  cases: { submitted: number; approved: number; declined: number; open: number; returnedAtLeastOnce: number; decided: number; resubmissionRate: number | null };
+  handoffs: { total: number; confirmed: number; failedOrDead: number; ambiguous: number; openOver24h: number; successRate: number | null };
+  baselines: Array<{ metric: string; value: number; method: string; sampleSize: number; periodStart: string; periodEnd: string }>;
+  tat: Dashboard;
+}
+
 export const api = {
   login: async (institution: string, username: string, password: string) => { const r = await call<{ csrfToken: string }>('POST', '/auth/login', { institution, username, password }); csrf = r.csrfToken; },
   mfa: (code: string) => call<void>('POST', '/auth/mfa/verify', { code }),
@@ -43,5 +54,13 @@ export const api = {
   note: (caseId: string, text: string) => call<unknown>('POST', `/staff/cases/${caseId}/notes`, { body: text }),
   review: (versionId: string, body: object) => call<unknown>('POST', `/staff/documents/${versionId}/reviews`, body),
   dashboard: (service?: string) => call<Dashboard>('GET', `/staff/tat/summary${service ? `?service=${encodeURIComponent(service)}` : ''}`),
+  handoffs: (status?: string) => call<HandoffRow[]>('GET', `/staff/integration/requests${status ? `?status=${encodeURIComponent(status)}` : ''}`),
+  handoff: (id: string) => call<HandoffDetail>('GET', `/staff/integration/requests/${id}`),
+  handoffHealth: () => call<HandoffHealth>('GET', '/staff/integration/health'),
+  confirmHandoff: (id: string, body: { externalRef: string; note: string }) => call<unknown>('POST', `/staff/integration/requests/${id}/confirm`, body),
+  resolveHandoff: (id: string, body: { decision: string; externalRef?: string; note?: string }) => call<{ status: string }>('POST', `/staff/integration/requests/${id}/resolve`, body),
+  retryHandoff: (id: string, note: string) => call<unknown>('POST', `/staff/integration/requests/${id}/retry`, { note }),
+  pilot: (service?: string) => call<PilotMetrics>('GET', `/staff/pilot/metrics${service ? `?service=${encodeURIComponent(service)}` : ''}`),
+  baseline: (body: object) => call<unknown>('POST', '/staff/pilot/baselines', body),
   newKey,
 };

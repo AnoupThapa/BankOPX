@@ -3,6 +3,7 @@ import { AuditService } from '../audit';
 import { CaseContext, CaseService } from '../case';
 import { ConfigService, ConfigValidatorRegistry } from '../configuration';
 import { AccessService, AuthService, decide, Principal, scopedBranchIds } from '../identity-access';
+import { IntegrationService } from '../integration';
 import { NotificationService } from '../notification';
 import { Db, Idempotency, Tx } from '../platform';
 import { TatEventInput, TatService } from '../tat-sla';
@@ -25,7 +26,7 @@ const SYSTEM = { id: '00000000-0000-0000-0000-000000000000', type: 'system' };
 export class WorkflowService implements OnModuleInit {
   constructor(
     private readonly db: Db, private readonly audit: AuditService, private readonly access: AccessService, private readonly auth: AuthService, private readonly config: ConfigService,
-    private readonly cases: CaseService, private readonly tat: TatService, private readonly notes: NotificationService, private readonly idem: Idempotency, private readonly validators: ConfigValidatorRegistry,
+    private readonly cases: CaseService, private readonly tat: TatService, private readonly notes: NotificationService, private readonly idem: Idempotency, private readonly validators: ConfigValidatorRegistry, private readonly integration: IntegrationService,
   ) {}
 
   onModuleInit() {
@@ -84,6 +85,8 @@ export class WorkflowService implements OnModuleInit {
     await tx.query(`UPDATE workflow_instance SET status='completed' WHERE id=$1`, [instanceId]);
     await tx.query(`UPDATE case_task SET status='cancelled', completed_at=now() WHERE case_id=$1 AND status IN ('open','waiting_customer')`, [c.caseId]);
     await this.tatEvent(tx, c, { eventType: 'case_closed', waitParty: 'system', phase: 'closed' });
+    // INT-02, ADR-017: the hand-off request commits with the decision, so a decision can never exist without its hand-off. Declines create none.
+    if (end.outcome === 'approved') await this.integration.enqueueForApprovedCase(tx, c);
     await this.notes.notify(tx, c.institutionId, { profileId: c.profileId, caseId: c.caseId, template: 'decision_made', code: c.trackingCode! });
   }
 
@@ -119,9 +122,9 @@ export class WorkflowService implements OnModuleInit {
     // Anything that needs the approval authority (an approval, or a task escalated to approvers) is checked against the amount and the applicant (APR-01, APR-03).
     if (node.type === 'approval' || t.requires_permission === 'case.approve') {
       const data = await this.cases.latestData(tx, t.case_id);
-      const field = node.type === 'approval' ? node.amountField : (Object.values(def.nodes).find((n) => n.type === 'approval') as ApprovalNode | undefined)?.amountField;
-      const raw = field ? data[field] : undefined;
-      amount = typeof raw === 'number' ? raw : undefined;
+      const appr = node.type === 'approval' ? node : (Object.values(def.nodes).find((n) => n.type === 'approval') as ApprovalNode | undefined);
+      const raw = appr?.amountField ? data[appr.amountField] : undefined;
+      amount = appr?.nonMonetary ? 0 : typeof raw === 'number' ? raw : undefined;
       applicantId = (await this.cases.applicantUserId(tx, ctx.profileId)) ?? undefined;
     }
     const d = decide(p, t.requires_permission as 'case.review', { institutionId: p.institutionId, branchId: ctx.branchId ?? undefined, amount, applicantId });
