@@ -23,3 +23,19 @@ New permissions: `credit.read`, `credit.prepare`, `credit.condition_clear`, `con
 All writes require the case to be under review (conditions are cleared only after approval). Out-of-scope cases look like "not found".
 
 Staff portal: a Credit review panel in the case workspace, and a Cases page listing every case in the officer's branches (so decided cases can be opened).
+
+## Phase 6b additions
+Migration `0007_credit_extensions`: `credit_input.party_id`; `credit_external_check` (append-only; each step a row; lawful basis and consent evidence mandatory; a `received` row must carry a reference); `credit_condition.overdue_flagged_at`.
+
+Configuration: calculation-set inputs accept `scope: "party"`, `partyRoles`, `aggregate`; the service `credit` block accepts `externalChecks: [providerKey]`; approval nodes accept `jointApproval: [{ aboveAmount, approvals }]`. Decimal arithmetic now lives in `platform/decimal.ts`.
+
+| Method and path | Permission | Purpose |
+|---|---|---|
+| POST `/staff/cases/:id/credit/inputs` (`partyId`) | credit.prepare | Per-party input; party required exactly when the input is per party and its role must be counted |
+| POST `/staff/cases/:id/credit/external-checks` | credit.prepare | Record a request (lawful basis, consent evidence, provider, party) |
+| POST `/ops/credit/run` | integration.invoke | Send requested checks once; flag overdue conditions once |
+| GET `/staff/credit/portfolio` | credit.read | Counts for the viewer's branches |
+| GET `/staff/tasks/:id/authority` | case.read | Now also returns `approvals: { recorded, required }` for joint-approval tasks |
+| POST `/staff/tasks/:id/complete` | task permission | An `approve` that is not the last needed returns `approvalsRecorded` and `approvalsRequired` and leaves the case unchanged |
+
+New check shown in the decision panel: "You have not already approved this request". Staff portal: per-party entry and breakdown, External checks section, Credit portfolio page, Cases search by tracking code. Admin portal: Credit definitions drafting page (JSON, validate, save, submit).

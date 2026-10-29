@@ -5,7 +5,7 @@ import { ConfigService, ConfigValidatorRegistry } from '../configuration';
 import { AccessService, AuthService, decide, Principal, scopedBranchIds } from '../identity-access';
 import { IntegrationService } from '../integration';
 import { NotificationService } from '../notification';
-import { Db, Idempotency, Tx } from '../platform';
+import { Db, Idempotency, parseDec, Tx } from '../platform';
 import { TatEventInput, TatService } from '../tat-sla';
 import { priorityOf } from './priority';
 import { ApprovalNode, EndNode, ParallelNode, TaskNode, WorkflowDef } from './workflow-schema';
@@ -14,7 +14,7 @@ import { workflowValidator } from './workflow-publish-checks';
 export type Outcome = 'complete' | 'return' | 'escalate' | 'approve' | 'decline';
 export interface CompleteBody { outcome?: string; rationale?: string; recommendation?: string; reasonCode?: string; customerText?: string; items?: Array<{ type: 'field' | 'document' | 'question'; key: string; text: string }>; dueAt?: string }
 interface TaskRow { branch_id: string | null; tracking_code: string; service_key: string; id: string; case_id: string; instance_id: string; node_key: string; fork_key: string | null; requires_permission: string; queue: string; status: string; assignee_id: string | null; due_at: Date | null; paused_at: Date | null; escalated_at: Date | null }
-export interface Eligibility { allowed: boolean; reason: string; checks: Array<{ check: string; ok: boolean; detail?: string }> }
+export interface Eligibility { allowed: boolean; reason: string; checks: Array<{ check: string; ok: boolean; detail?: string }>; approvals?: { recorded: number; required: number } }
 
 const SYSTEM = { id: '00000000-0000-0000-0000-000000000000', type: 'system' };
 
@@ -113,6 +113,15 @@ export class WorkflowService implements OnModuleInit {
     return t;
   }
 
+  /** Approvals needed at this amount: the highest tier whose threshold the amount exceeds, otherwise one (APR-03). An unknown amount needs the highest tier (fail safe). */
+  private requiredApprovals(node: ApprovalNode, amount: number | undefined): number {
+    const tiers = node.jointApproval ?? [];
+    if (!tiers.length) return 1;
+    if (amount === undefined || !Number.isFinite(amount)) return Math.max(...tiers.map((x) => x.approvals));
+    let amt: bigint; try { amt = parseDec(String(amount)); } catch { return Math.max(...tiers.map((x) => x.approvals)); }
+    return tiers.filter((x) => amt > parseDec(x.aboveAmount)).reduce((m, x) => Math.max(m, x.approvals), 1);
+  }
+
   /** Runs every check the decision panel shows. Same function backs the preview and the real action, so they cannot disagree. */
   async eligibility(tx: Tx, p: Principal, t: TaskRow, def: WorkflowDef): Promise<Eligibility> {
     const node = def.nodes[t.node_key] as TaskNode | ApprovalNode;
@@ -138,9 +147,15 @@ export class WorkflowService implements OnModuleInit {
       const prior = node.type === 'approval' && node.separateFrom?.length ? (await tx.query(`SELECT 1 FROM case_task WHERE case_id=$1 AND node_key = ANY($2::text[]) AND completed_by=$3 LIMIT 1`, [t.case_id, node.separateFrom, p.userId])).rowCount! > 0 : false;
       checks.push({ check: 'separate_from_earlier_stage', ok: !prior, detail: prior ? 'you worked an earlier stage of this case' : undefined });
     }
+    let approvals: Eligibility['approvals'];
+    if (node.type === 'approval' && node.jointApproval?.length) {
+      const prior = (await tx.query(`SELECT decided_by FROM approval WHERE task_id=$1 AND decision='approve'`, [t.id])).rows.map((r) => r.decided_by as string);
+      approvals = { recorded: prior.length, required: this.requiredApprovals(node, amount) };
+      checks.push({ check: 'not_already_approved_by_you', ok: !prior.includes(p.userId), detail: prior.includes(p.userId) ? 'you already approved this request' : undefined });
+    }
     checks.push({ check: 'task_is_yours_or_unassigned', ok: !t.assignee_id || t.assignee_id === p.userId, detail: t.assignee_id && t.assignee_id !== p.userId ? 'assigned to someone else' : undefined });
     const bad = checks.find((c) => !c.ok);
-    return { allowed: !bad, reason: bad ? (bad.detail === 'out_of_scope' || bad.detail === 'no_permission' || bad.detail === 'tenant_mismatch' ? 'not_found' : bad.detail === 'above_authority_limit' ? 'above_authority_limit' : bad.check) : 'ok', checks };
+    return { approvals, allowed: !bad, reason: bad ? (bad.detail === 'out_of_scope' || bad.detail === 'no_permission' || bad.detail === 'tenant_mismatch' ? 'not_found' : bad.detail === 'above_authority_limit' ? 'above_authority_limit' : bad.check) : 'ok', checks };
   }
 
   private async deny(p: Principal, t: TaskRow, e: Eligibility): Promise<never> {
@@ -187,7 +202,7 @@ export class WorkflowService implements OnModuleInit {
     });
   }
 
-  // ---------- claim, assign, release (QUE-02, APR-04) ----------
+  // ---------- claim, assign, release (QUE-02, APR-03) ----------
   async claim(p: Principal, taskId: string) {
     return this.db.withTenant(p.institutionId, async (tx) => {
       const t = await this.loadTask(tx, taskId, true);
@@ -205,7 +220,7 @@ export class WorkflowService implements OnModuleInit {
     });
   }
 
-  /** Team leads assign work to someone who is themselves eligible for it (QUE-02). Delegations count while live and not after (APR-04). */
+  /** Team leads assign work to someone who is themselves eligible for it (QUE-02). Delegations count while live and not after (APR-03). */
   async assign(p: Principal, taskId: string, userId: string) {
     return this.db.withTenant(p.institutionId, async (tx) => {
       const t = await this.loadTask(tx, taskId, true);
@@ -282,6 +297,13 @@ export class WorkflowService implements OnModuleInit {
         return { taskId: t.id, outcome, caseState: ctx.state };
       }
       if (node.type === 'approval') {                                                  // approve or decline: a recorded human decision
+        if (outcome === 'approve' && e.approvals && e.approvals.recorded + 1 < e.approvals.required) {
+          // Joint approval (APR-03): this approval is recorded and the task goes back to the queue for a different approver. The case does not move.
+          await record('approve');
+          await tx.query(`UPDATE case_task SET assignee_id=NULL WHERE id=$1`, [t.id]);
+          await this.audit.record(tx, { institutionId: p.institutionId, actorId: p.userId, actorType: p.actorType, action: 'approval.partial', objectType: 'case_task', objectId: t.id, reason: body.rationale, detail: { recorded: e.approvals.recorded + 1, required: e.approvals.required } });
+          return { taskId: t.id, outcome, caseState: ctx.state, approvalsRecorded: e.approvals.recorded + 1, approvalsRequired: e.approvals.required };
+        }
         await finishTask('done', outcome);
         await record(outcome as 'approve' | 'decline');
         await this.enter(tx, ctx, t.instance_id, def, outcome === 'approve' ? node.outcomes.approve : node.outcomes.decline);

@@ -1,4 +1,5 @@
 import { ConfigValidator } from '../configuration';
+import { parseDec } from '../platform';
 import { ApprovalNode, Node, ParallelNode, TASK_PERMISSIONS, TaskNode, WorkflowDef } from './workflow-schema';
 
 const KEY = /^[a-z][a-z0-9_]{0,40}$/;
@@ -59,6 +60,21 @@ export const workflowValidator: ConfigValidator = (kind, c) => {
       if (!has(a.outcomes?.decline) || (nodes[a.outcomes.decline]!.type !== 'end') || (nodes[a.outcomes.decline] as { outcome?: string }).outcome !== 'declined') e.push(`WFL-08: approval '${key}' must lead to an end node with outcome 'declined'`);
       if (a.amountField !== undefined && !/^[a-z][a-z0-9_]{0,40}$/.test(a.amountField)) e.push(`APR-03: '${key}' amountField is invalid`);
       if (a.nonMonetary !== undefined && (a.nonMonetary !== true || a.amountField !== undefined)) e.push(`APR-03: '${key}' is either non-monetary or has an amountField, not both`);
+      if (a.jointApproval !== undefined) {
+        const j = a.jointApproval;
+        if (!a.amountField) e.push(`APR-03: '${key}' joint approval needs an amountField`);
+        if (!Array.isArray(j) || !j.length || j.length > 5) e.push(`APR-03: '${key}' jointApproval needs 1 to 5 tiers`);
+        else {
+          let last = -1n;
+          for (const [i, tier] of j.entries()) {
+            let thr: bigint | null = null; try { thr = parseDec(String(tier.aboveAmount)); } catch { thr = null; }
+            if (thr === null || thr < 0n) e.push(`APR-03: '${key}' tier ${i} aboveAmount must be a non-negative decimal text`);
+            else { if (thr <= last) e.push(`APR-03: '${key}' tiers must have strictly increasing thresholds`); last = thr; }
+            if (!Number.isInteger(tier.approvals) || tier.approvals < 2 || tier.approvals > 5) e.push(`APR-03: '${key}' tier ${i} approvals must be 2 to 5`);
+            else if (i > 0 && tier.approvals < j[i - 1]!.approvals) e.push(`APR-03: '${key}' a higher tier cannot need fewer approvals`);
+          }
+        }
+      }
       for (const s of a.separateFrom ?? []) if (!has(s) || nodes[s]!.type !== 'task') e.push(`APR-02: '${key}' separateFrom '${s}' must be a task node`);
     } else if (n.type === 'end') {
       if (!['approved', 'declined'].includes(n.outcome)) e.push(`WFL-08: end '${key}' needs an outcome`);

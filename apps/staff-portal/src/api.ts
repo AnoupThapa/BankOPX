@@ -13,7 +13,7 @@ async function call<T>(method: string, url: string, body?: unknown, headers: Rec
 export interface Priority { level: 'high' | 'normal'; reason: string; sla: string }
 export interface TaskRow { taskId: string; caseId: string; trackingCode: string; serviceKey: string; node: string; queue: string; requires: string; status: string; assigneeId: string | null; mine: boolean; dueAt: string | null; escalated: boolean; customerResponded: boolean; priority: Priority }
 export interface Check { check: string; ok: boolean; detail?: string }
-export interface Eligibility { allowed: boolean; reason: string; checks: Check[] }
+export interface Eligibility { allowed: boolean; reason: string; checks: Check[]; approvals?: { recorded: number; required: number } }
 export interface WsTask { taskId: string; node: string; title: { en: string } | null; status: string; queue: string; requires: string; assigneeId: string | null; dueAt: string | null; outcomes: string[]; eligibility: Eligibility | null }
 export interface Workspace {
   caseId: string; trackingCode: string; serviceKey: string; state: string; caseState: string;
@@ -42,13 +42,15 @@ export interface PilotMetrics {
 }
 
 type Loc = { en: string; ne: string };
-export interface CreditStatus { enabled: boolean; exists: boolean; canPrepare: boolean; proposalTypes: Array<{ key: string; label: Loc }> }
+export interface CreditStatus { enabled: boolean; exists: boolean; canPrepare: boolean; proposalTypes: Array<{ key: string; label: Loc }>; externalCheckProviders?: string[] }
 export type MeasureRes = { key: string; status: 'ok'; value: string } | { key: string; status: 'missing'; missing: string[] } | { key: string; status: 'stale'; stale: string[] } | { key: string; status: 'conflict'; conflicting: string[] } | { key: string; status: 'undefined'; reason: string };
 export interface CreditView {
   proposalId: string; trackingCode: string; productClass: string; proposalType: Loc; pinned: { checklist: number; calculationSet: number; scorecard: number | null };
   facility: { requestedAmount: string; currency: string; tenorMonths: number | null; purpose: string | null }; caseState: string;
   parties: Array<{ partyId: string; role: string; name: string; note: string | null }>;
-  inputDefinitions: Array<{ key: string; label: Loc; unit: string }>; measureDefinitions: Array<{ key: string; label: Loc }>;
+  inputDefinitions: Array<{ key: string; label: Loc; unit: string; scope?: 'proposal' | 'party'; partyRoles?: string[]; aggregate?: string }>;
+  partyInputs: Array<{ key: string; partyId: string; role: string; value: string | null; asOf: string | null; source: string | null; conflict: boolean }>;
+  externalChecks: Array<{ correlationId: string; partyId: string | null; provider: string; status: string; resultRef: string | null; summary: Record<string, string> | null; errorCode: string | null; requestedAt: string }>; measureDefinitions: Array<{ key: string; label: Loc }>;
   inputs: Array<{ key: string; value: string; asOf: string; source: string; conflict: boolean }>;
   assessment: { calculation: { measures: MeasureRes[]; ranAt: string } | null;
     score: { status: 'scored' | 'manual_review'; score: string | null; displayLabel: string; scorecard: { name: string; label: string; effectiveDate: string }; missing: string[]; reviewAction: { label: Loc; reviewAction: string } | null;
@@ -56,6 +58,11 @@ export interface CreditView {
   checklist: { name: string; items: Array<{ key: string; label: Loc; required: boolean; answer: string | null; note: string | null }>; requiredUnanswered: string[]; notMet: string[] };
   recommendation: { recommendation: string; rationale: string; exceptions: string | null; mitigants: string | null; concerns: string | null; scoreOverride: { reason: string; higherApprovalRequired: boolean } | null; at: string } | null;
   conditions: Array<{ conditionId: string; kind: string; text: string; evidenceRequirement: string; dueDate: string | null; status: string; overdue: boolean }>; humanAndSystem: string;
+}
+
+export interface CreditPortfolio {
+  asOf: string; proposals: number; byCaseState: Record<string, number>; byRecommendation: Record<string, number>; byScoreStatus: Record<string, number>;
+  conditions: { open: number; overdue: number; cleared: number }; externalChecks: Record<string, number>; definitions?: Record<string, string>;
 }
 
 export const api = {
@@ -67,7 +74,7 @@ export const api = {
   claim: (id: string) => call<unknown>('POST', `/staff/tasks/${id}/claim`, {}),
   release: (id: string) => call<unknown>('POST', `/staff/tasks/${id}/release`, {}),
   workspace: (caseId: string) => call<Workspace>('GET', `/staff/cases/${caseId}/workspace`),
-  complete: (id: string, body: object, key: string) => call<{ outcome: string; caseState: string }>('POST', `/staff/tasks/${id}/complete`, body, { 'idempotency-key': key }),
+  complete: (id: string, body: object, key: string) => call<{ outcome: string; caseState: string; approvalsRecorded?: number; approvalsRequired?: number }>('POST', `/staff/tasks/${id}/complete`, body, { 'idempotency-key': key }),
   note: (caseId: string, text: string) => call<unknown>('POST', `/staff/cases/${caseId}/notes`, { body: text }),
   review: (versionId: string, body: object) => call<unknown>('POST', `/staff/documents/${versionId}/reviews`, body),
   dashboard: (service?: string) => call<Dashboard>('GET', `/staff/tat/summary${service ? `?service=${encodeURIComponent(service)}` : ''}`),
@@ -80,6 +87,7 @@ export const api = {
   pilot: (service?: string) => call<PilotMetrics>('GET', `/staff/pilot/metrics${service ? `?service=${encodeURIComponent(service)}` : ''}`),
   baseline: (body: object) => call<unknown>('POST', '/staff/pilot/baselines', body),
   cases: () => call<Array<{ caseId: string; trackingCode: string; serviceKey: string; state: string; submittedAt: string }>>('GET', '/staff/cases'),
+  creditPortfolio: () => call<CreditPortfolio>('GET', '/staff/credit/portfolio'),
   creditStatus: (caseId: string) => call<CreditStatus>('GET', `/staff/cases/${caseId}/credit/status`),
   credit: (caseId: string) => call<CreditView>('GET', `/staff/cases/${caseId}/credit`),
   creditPost: <T = unknown>(caseId: string, path: string, body: object = {}, key?: string) => call<T>('POST', `/staff/cases/${caseId}/credit${path}`, body, key ? { 'idempotency-key': key } : {}),

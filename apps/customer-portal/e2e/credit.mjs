@@ -73,7 +73,7 @@ seen = otpCount(dest); await cust.getByRole('button', { name: /send code/i }).cl
 await cust.getByLabel(/one-time code/i).fill(await otpFor(dest, seen)); await cust.getByRole('button', { name: /continue/i }).click();
 await cust.getByLabel(/account number/i).fill(`55${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`); await cust.getByLabel(/date of birth/i).fill('1990-01-01');
 await cust.getByRole('button', { name: /^link$/i }).click(); await cust.getByText(/your bank relationship is linked/i).waitFor();
-await cust.getByRole('button', { name: /^services$/i }).click(); await cust.getByRole('button', { name: /business loan/i }).click();
+await cust.getByRole('button', { name: /^services$/i }).click(); await cust.getByRole("button", { name: /business loan \(demo\)/i }).click();
 await cust.getByRole('button', { name: /start application/i }).click();
 await cust.getByLabel(/amount requested/i).fill('500000'); await cust.getByLabel(/tenor in months/i).fill('36'); await cust.getByLabel(/^purpose/i).fill('Buy a grain mill');
 await cust.locator('input[type=file][capture]').setInputFiles({ name: 'id.jpg', mimeType: 'image/jpeg', buffer: jpeg(5) });

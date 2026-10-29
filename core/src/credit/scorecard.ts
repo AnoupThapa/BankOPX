@@ -1,4 +1,4 @@
-import { add, cmp, div, formatDec, isDecimalText, mul, parseDec } from './decimal';
+import { add, cmp, div, formatDec, isDecimalText, mul, parseDec } from '../platform';
 import type { CalcResult } from './calc';
 
 // Scorecards are configuration approved by the credit policy owner (CRD-05, CRD-08). The engine only applies the approved definition. It never invents a value

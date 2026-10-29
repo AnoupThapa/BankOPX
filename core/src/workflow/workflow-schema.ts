@@ -20,6 +20,11 @@ export interface ApprovalNode extends Common {
   amountField?: string;
   /** The request has no monetary value (e.g. a certificate). Authority limits are then not applicable and the amount is treated as 0. Exclusive with amountField; reviewed by a checker like any config (APR-03). */
   nonMonetary?: true;
+  /**
+   * Joint approval (APR-03, docs/08): above each threshold this many different approvers must approve before the case moves on. Each of them must individually pass the
+   * authority checks for the amount. One decline by an authorised approver ends it at once. Thresholds are decimal text. Needs amountField.
+   */
+  jointApproval?: Array<{ aboveAmount: string; approvals: number }>;
   /** Nodes whose completers may not also decide (maker-checker, APR-02). */
   separateFrom?: string[];
   outcomes: { approve: string; decline: string };

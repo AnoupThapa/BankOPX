@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { CreditService } from '../credit';
 import { IntegrationService } from '../integration';
 import { Db } from '../platform';
 import { WorkflowService } from '../workflow';
@@ -13,7 +14,7 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
   private timer?: NodeJS.Timeout;
   private running = false;
   private readonly log = new Logger('scheduler');
-  constructor(private readonly db: Db, private readonly workflow: WorkflowService, private readonly integration: IntegrationService) {}
+  constructor(private readonly db: Db, private readonly workflow: WorkflowService, private readonly integration: IntegrationService, private readonly credit: CreditService) {}
 
   onModuleInit() {
     if (process.env.BBJP_SCHEDULER !== '1') return;
@@ -33,6 +34,7 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
         try {
           total.escalated += (await this.workflow.runDueEscalations(id)).escalated;
           total.attempted += (await this.integration.dispatchDue(id)).attempted;
+          await this.credit.runDue(id);
         } catch { this.log.error('scheduler pass failed for one institution'); }   // no error text: it may carry data
       }
     } finally { this.running = false; }

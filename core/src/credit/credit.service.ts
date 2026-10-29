@@ -1,11 +1,14 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { AuditService } from '../audit';
 import { CaseService } from '../case';
 import { ConfigService } from '../configuration';
 import { decide, Principal, scopedBranchIds } from '../identity-access';
 import { Db, decryptField, encryptField, Idempotency, Tx } from '../platform';
-import { CalcResult, CalculationSet, evaluate, InputValue } from './calc';
-import { isDecimalText, parseDec } from './decimal';
+import { aggregateParties, PartyRef, PartyValue } from './aggregate';
+import { CalcResult, CalculationSet, evaluate, InputDef, InputValue } from './calc';
+import { isDecimalText, parseDec } from '../platform';
+import { ExternalCheckPort } from './external-check';
 import { Scorecard, score, ScoreResult } from './scorecard';
 
 const SYSTEM_LABEL = 'System-generated figures support the review. They are not a decision and not a recommendation.';
@@ -24,7 +27,7 @@ type Loc = { en: string; ne: string };
  */
 @Injectable()
 export class CreditService {
-  constructor(private readonly db: Db, private readonly audit: AuditService, private readonly cases: CaseService, private readonly config: ConfigService, private readonly idem: Idempotency) {}
+  constructor(private readonly db: Db, private readonly audit: AuditService, private readonly cases: CaseService, private readonly config: ConfigService, private readonly idem: Idempotency, private readonly external: ExternalCheckPort) {}
 
   /** Runs `fn` in one tenant transaction; with an idempotency key a replay returns the first result and changes nothing (FRM-10, INT-02). */
   private run<T>(p: Principal, scope: string, key: string | undefined, payload: unknown, fn: (tx: Tx) => Promise<T>): Promise<T> {
@@ -49,7 +52,7 @@ export class CreditService {
   }
   private async creditSetting(tx: Tx, ctx: { institutionId: string; serviceVersionId: string }) {
     const svc = await this.config.getPinnedVersion(ctx.institutionId, 'service', ctx.serviceVersionId, tx);
-    return svc?.content.credit as { productClass: string; proposalTypeKeys?: string[]; checklistKey: string; calculationSetKey: string; scorecardKey?: string; amountField: string; tenorField?: string; purposeField?: string; currency: string } | undefined;
+    return svc?.content.credit as { productClass: string; proposalTypeKeys?: string[]; checklistKey: string; calculationSetKey: string; scorecardKey?: string; externalChecks?: string[]; amountField: string; tenorField?: string; purposeField?: string; currency: string } | undefined;
   }
   private pinned<T>(tx: Tx, inst: string, kind: string, id: string) { return this.config.getPinnedVersion(inst, kind, id, tx).then((v) => v as unknown as { id: string; key: string; version: number; contentHash: string; content: T }); }
 
@@ -60,7 +63,7 @@ export class CreditService {
       const setting = await this.creditSetting(tx, ctx);
       const types = setting ? (await this.config.listPublished(p.institutionId, 'proposal_type'))
         .filter((t) => (t.content.productClasses as string[]).includes(setting.productClass) && (!setting.proposalTypeKeys || setting.proposalTypeKeys.includes(t.key))).map((t) => ({ key: t.key, label: t.content.label as Loc })) : [];
-      return { enabled: !!setting, exists: !!(await this.proposalOf(tx, caseId)), canPrepare: decide(p, 'credit.prepare', { institutionId: p.institutionId, branchId: ctx.branchId ?? undefined }).allow, proposalTypes: types };
+      return { enabled: !!setting, exists: !!(await this.proposalOf(tx, caseId)), canPrepare: decide(p, 'credit.prepare', { institutionId: p.institutionId, branchId: ctx.branchId ?? undefined }).allow, proposalTypes: types, externalCheckProviders: setting?.externalChecks ?? [] };
     });
   }
 
@@ -116,7 +119,7 @@ export class CreditService {
   }
 
   // ---------- inputs ----------
-  async setInput(p: Principal, caseId: string, b: { key?: string; value?: string; asOf?: string; source?: string; evidenceNote?: string }) {
+  async setInput(p: Principal, caseId: string, b: { key?: string; partyId?: string; value?: string; asOf?: string; source?: string; evidenceNote?: string }) {
     if (!isDecimalText(b.value)) throw new BadRequestException('value_must_be_a_decimal');
     if (!SOURCES.includes(b.source as never)) throw new BadRequestException('invalid_source');
     if (!b.asOf || !/^\d{4}-\d{2}-\d{2}$/.test(b.asOf) || Number.isNaN(Date.parse(b.asOf)) || new Date(b.asOf) > new Date()) throw new BadRequestException('as_of_must_be_a_past_or_current_date');
@@ -124,11 +127,20 @@ export class CreditService {
     return this.db.withTenant(p.institutionId, async (tx) => {
       await this.open_(tx, p, caseId); const pr = await this.needProposal(tx, caseId);
       const cs = await this.pinned<CalculationSet>(tx, p.institutionId, 'calculation_set', pr.calculation_version_id);
-      if (!cs.content.inputs.some((i) => i.key === b.key)) throw new BadRequestException('unknown_input');
+      const def = cs.content.inputs.find((i) => i.key === b.key);
+      if (!def) throw new BadRequestException('unknown_input');
       parseDec(b.value!);
-      const seq = (await tx.query(`INSERT INTO credit_input (institution_id, proposal_id, key, value, as_of, source, evidence_note, entered_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING seq`,
-        [p.institutionId, pr.id, b.key, b.value, b.asOf, b.source, String(b.evidenceNote ?? '').slice(0, 500) || null, p.userId])).rows[0].seq;
-      await this.audit.record(tx, { institutionId: p.institutionId, actorId: p.userId, actorType: p.actorType, action: 'credit.input_recorded', objectType: 'credit_proposal', objectId: pr.id, detail: { key: b.key, source: b.source } });
+      let partyId: string | null = null;
+      if (def.scope === 'party') {
+        if (!b.partyId || !/^[0-9a-f-]{36}$/.test(String(b.partyId))) throw new BadRequestException('party_required_for_this_input');
+        const party = (await tx.query('SELECT role FROM credit_party WHERE id=$1 AND proposal_id=$2', [b.partyId, pr.id])).rows[0];
+        if (!party) throw new BadRequestException('unknown_party');
+        if (!def.partyRoles!.includes(party.role)) throw new BadRequestException('party_role_not_counted_for_this_input');
+        partyId = b.partyId;
+      } else if (b.partyId) throw new BadRequestException('this_input_is_not_per_party');
+      const seq = (await tx.query(`INSERT INTO credit_input (institution_id, proposal_id, party_id, key, value, as_of, source, evidence_note, entered_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING seq`,
+        [p.institutionId, pr.id, partyId, b.key, b.value, b.asOf, b.source, String(b.evidenceNote ?? '').slice(0, 500) || null, p.userId])).rows[0].seq;
+      await this.audit.record(tx, { institutionId: p.institutionId, actorId: p.userId, actorType: p.actorType, action: 'credit.input_recorded', objectType: 'credit_proposal', objectId: pr.id, detail: { key: b.key, source: b.source, perParty: !!partyId } });
       return { seq: Number(seq) };
     });
   }
@@ -151,13 +163,36 @@ export class CreditService {
     return out;
   }
 
+  /** Effective value per input definition: proposal-level inputs directly, per-party inputs combined by the approved rule. A party in a counted role without a value leaves the input missing. */
+  private effectiveAll(rows: Array<{ seq: string; key: string; value: string; as_of: string; source: string; party_id: string | null }>, defs: InputDef[], parties: PartyRef[]) {
+    const out: Record<string, InputValue & { source: string; seq: number }> = {};
+    for (const d of defs) {
+      if (d.scope === 'party') {
+        const perParty = new Map<string, PartyValue>(); let maxSeq = 0;
+        for (const party of parties.filter((x) => d.partyRoles!.includes(x.role))) {
+          const pr = rows.filter((r) => r.key === d.key && r.party_id === party.id);
+          if (!pr.length) continue;
+          const e = this.effectiveInputs(pr)[d.key]!; perParty.set(party.id, { value: e.value, asOf: e.asOf!, conflict: !!e.conflict }); maxSeq = Math.max(maxSeq, e.seq);
+        }
+        const agg = aggregateParties({ partyRoles: d.partyRoles!, aggregate: d.aggregate! }, parties, perParty);
+        if ('missing' in agg) continue;
+        out[d.key] = { value: agg.value, asOf: agg.asOf, conflict: agg.conflict, source: 'party_aggregate', seq: maxSeq };
+      } else {
+        const pr = rows.filter((r) => r.key === d.key && !r.party_id);
+        if (pr.length) out[d.key] = this.effectiveInputs(pr)[d.key]!;
+      }
+    }
+    return out;
+  }
+
   // ---------- assessment ----------
   async assess(p: Principal, caseId: string) {
     return this.db.withTenant(p.institutionId, async (tx) => {
       await this.open_(tx, p, caseId); const pr = await this.needProposal(tx, caseId, true);
       const cs = await this.pinned<CalculationSet>(tx, p.institutionId, 'calculation_set', pr.calculation_version_id);
-      const rows = (await tx.query('SELECT seq, key, value::text, as_of::text, source FROM credit_input WHERE proposal_id=$1 ORDER BY seq', [pr.id])).rows;
-      const eff = this.effectiveInputs(rows); const maxSeq = rows.length ? Number(rows[rows.length - 1].seq) : 0;
+      const rows = (await tx.query('SELECT seq, key, value::text, as_of::text, source, party_id FROM credit_input WHERE proposal_id=$1 ORDER BY seq', [pr.id])).rows;
+      const partyRefs = (await tx.query('SELECT id, role FROM credit_party WHERE proposal_id=$1', [pr.id])).rows as PartyRef[];
+      const eff = this.effectiveAll(rows, cs.content.inputs, partyRefs); const maxSeq = rows.length ? Number(rows[rows.length - 1].seq) : 0;
       const calc = evaluate(cs.content, eff, new Date());
       const used = { inputs: Object.fromEntries(Object.entries(eff).map(([k, v]) => [k, { value: v.value, asOf: v.asOf, source: v.source, conflict: !!v.conflict }])), maxInputSeq: maxSeq, calculationVersion: cs.version };
       await tx.query(`INSERT INTO credit_assessment (institution_id, proposal_id, kind, inputs_used, result, engine_version, run_by) VALUES ($1,$2,'calculation',$3,$4,$5,$6)`, [p.institutionId, pr.id, JSON.stringify(used), JSON.stringify(calc), calc.engineVersion, p.userId]);
@@ -221,6 +256,51 @@ export class CreditService {
     return m;
   }
 
+  // ---------- external checks (CRD-09) ----------
+  /** Records the request. The provider is called later by the dispatcher, outside any request (ADR-017). */
+  async requestExternalCheck(p: Principal, caseId: string, b: { partyId?: string; provider?: string; lawfulBasis?: string; consentEvidence?: string }) {
+    if (!String(b.lawfulBasis ?? '').trim() || !String(b.consentEvidence ?? '').trim()) throw new BadRequestException('lawful_basis_and_consent_evidence_required');
+    return this.db.withTenant(p.institutionId, async (tx) => {
+      const ctx = await this.open_(tx, p, caseId); const pr = await this.needProposal(tx, caseId);
+      const setting = await this.creditSetting(tx, ctx);
+      if (!setting?.externalChecks?.includes(String(b.provider))) throw new BadRequestException('provider_not_authorised_for_this_service');
+      if (!b.partyId || !/^[0-9a-f-]{36}$/.test(String(b.partyId)) || !(await tx.query('SELECT 1 FROM credit_party WHERE id=$1 AND proposal_id=$2', [b.partyId, pr.id])).rowCount) throw new BadRequestException('unknown_party');
+      const corr = `chk-${randomUUID()}`;
+      await tx.query(`INSERT INTO credit_external_check (institution_id, proposal_id, party_id, provider, correlation_id, status, lawful_basis, consent_evidence, requested_by) VALUES ($1,$2,$3,$4,$5,'requested',$6,$7,$8)`,
+        [p.institutionId, pr.id, b.partyId, b.provider, corr, String(b.lawfulBasis).slice(0, 500), String(b.consentEvidence).slice(0, 500), p.userId]);
+      await this.audit.record(tx, { institutionId: p.institutionId, actorId: p.userId, actorType: p.actorType, action: 'credit.external_check_requested', objectType: 'credit_proposal', objectId: pr.id, detail: { provider: b.provider } });
+      return { correlationId: corr };
+    });
+  }
+
+  /** Sends requested checks. Run by the scheduler or the integration identity. A request marked "sent" that never gets a result is shown as such and needs a new request: nothing is re-sent blindly. */
+  async dispatchExternalChecks(institutionId: string, limit = 10) {
+    const claimed = await this.db.withTenant(institutionId, async (tx) => {
+      await tx.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`credit-ext:${institutionId}`]);        // one claimer at a time; the app role has no UPDATE right on this append-only table, so no row locks
+      const rows = (await tx.query(
+        `SELECT r.seq, r.proposal_id, r.party_id, r.provider, r.correlation_id, r.lawful_basis, r.consent_evidence, r.requested_by, pa.name_enc
+           FROM credit_external_check r JOIN credit_party pa ON pa.id = r.party_id
+          WHERE r.status='requested' AND NOT EXISTS (SELECT 1 FROM credit_external_check x WHERE x.correlation_id = r.correlation_id AND x.seq > r.seq)
+          ORDER BY r.seq LIMIT $1`, [limit])).rows;
+      for (const r of rows) await tx.query(`INSERT INTO credit_external_check (institution_id, proposal_id, party_id, provider, correlation_id, status, lawful_basis, consent_evidence, requested_by) VALUES ($1,$2,$3,$4,$5,'sent',$6,$7,$8)`,
+        [institutionId, r.proposal_id, r.party_id, r.provider, r.correlation_id, r.lawful_basis, r.consent_evidence, r.requested_by]);
+      return rows.map((r) => ({ ...r, name: decryptField(r.name_enc as string) }));
+    });
+    let received = 0; let failed = 0; let unavailable = 0;
+    for (const r of claimed) {
+      let res: Awaited<ReturnType<ExternalCheckPort['request']>>;
+      try { res = await this.external.request(institutionId, { provider: r.provider, correlationId: r.correlation_id, subject: { name: r.name } }); } catch { res = { kind: 'failed', code: 'provider_exception' }; }   // provider text is never stored
+      await this.db.withTenant(institutionId, async (tx) => {
+        const st = res.kind;
+        await tx.query(`INSERT INTO credit_external_check (institution_id, proposal_id, party_id, provider, correlation_id, status, result_ref, summary, error_code, lawful_basis, consent_evidence, requested_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+          [institutionId, r.proposal_id, r.party_id, r.provider, r.correlation_id, st, st === 'received' ? res.resultRef : null, st === 'received' ? JSON.stringify(res.summary) : null, st === 'failed' ? res.code : null, r.lawful_basis, r.consent_evidence, r.requested_by]);
+        await this.audit.record(tx, { institutionId, actorType: 'system', action: `credit.external_check_${st}`, objectType: 'credit_proposal', objectId: r.proposal_id, detail: { provider: r.provider } });
+      });
+      if (res.kind === 'received') received++; else if (res.kind === 'failed') failed++; else unavailable++;
+    }
+    return { attempted: claimed.length, received, failed, unavailable };
+  }
+
   // ---------- conditions (docs/10 §6, APR-06) ----------
   async addCondition(p: Principal, caseId: string, idempotencyKey: string | undefined, b: { kind?: string; text?: string; evidenceRequirement?: string; dueDate?: string }) {
     if (!KINDS.includes(b.kind as never)) throw new BadRequestException('invalid_kind');
@@ -260,6 +340,37 @@ export class CreditService {
       .map((r) => ({ conditionId: r.id, caseId: r.case_id, trackingCode: r.tracking_code, kind: r.kind, text: r.text, dueDate: r.due_date, overdue: r.overdue })));
   }
 
+  /** Flags each overdue open condition once (audited) so it appears on the portfolio view. It raises no task: that needs a bank decision on who owns it (A-041). */
+  async flagOverdueConditions(institutionId: string) {
+    return this.db.withTenant(institutionId, async (tx) => {
+      const rows = (await tx.query(`UPDATE credit_condition SET overdue_flagged_at = now() WHERE status='open' AND due_date IS NOT NULL AND due_date < current_date AND overdue_flagged_at IS NULL RETURNING id, kind`)).rows;
+      for (const r of rows) await this.audit.record(tx, { institutionId, actorType: 'system', action: 'credit.condition_overdue', objectType: 'credit_condition', objectId: r.id, detail: { kind: r.kind } });
+      return { flagged: rows.length };
+    });
+  }
+  async runDue(institutionId: string) { return { externalChecks: await this.dispatchExternalChecks(institutionId), conditions: await this.flagOverdueConditions(institutionId) }; }
+
+  /** Counts for the viewer's branches: proposals by latest recommendation and case state, score outcomes, conditions. No customer or employee identities. */
+  async portfolio(p: Principal) {
+    const b = scopedBranchIds(p, 'credit.read');
+    const empty = { proposals: 0, byCaseState: {}, byRecommendation: {}, byScoreStatus: {}, conditions: { open: 0, overdue: 0, cleared: 0 }, externalChecks: {} };
+    if (!b.length) return { asOf: new Date().toISOString(), ...empty };
+    return this.db.withTenant(p.institutionId, async (tx) => {
+      const props = (await tx.query(
+        `SELECT pr.id, pr.case_id,
+                (SELECT recommendation FROM credit_recommendation r WHERE r.proposal_id = pr.id ORDER BY seq DESC LIMIT 1) rec,
+                (SELECT result->>'status' FROM credit_assessment a WHERE a.proposal_id = pr.id AND a.kind='score' ORDER BY seq DESC LIMIT 1) score_status
+           FROM credit_proposal pr WHERE pr.branch_id = ANY($1::uuid[])`, [b])).rows;
+      const states = await this.cases.statesOf(tx, props.map((r) => r.case_id as string));
+      const tally = (f: (r: (typeof props)[number]) => string) => props.reduce<Record<string, number>>((m, r) => { const k = f(r); m[k] = (m[k] ?? 0) + 1; return m; }, {});
+      const cond = (await tx.query(`SELECT count(*) FILTER (WHERE status='open')::int open, count(*) FILTER (WHERE status='open' AND due_date IS NOT NULL AND due_date < current_date)::int overdue, count(*) FILTER (WHERE status='cleared')::int cleared FROM credit_condition WHERE branch_id = ANY($1::uuid[])`, [b])).rows[0];
+      const checks = (await tx.query(`SELECT status, count(*)::int n FROM (SELECT DISTINCT ON (x.correlation_id) x.status FROM credit_external_check x JOIN credit_proposal pr ON pr.id = x.proposal_id WHERE pr.branch_id = ANY($1::uuid[]) ORDER BY x.correlation_id, x.seq DESC) l GROUP BY status`, [b])).rows;
+      return { asOf: new Date().toISOString(), proposals: props.length, byCaseState: tally((r) => states.get(r.case_id as string) ?? 'unknown'), byRecommendation: tally((r) => r.rec ?? 'none_yet'), byScoreStatus: tally((r) => r.score_status ?? 'not_run'),
+        conditions: cond, externalChecks: Object.fromEntries(checks.map((c) => [c.status, c.n])),
+        definitions: { byRecommendation: 'Latest recommendation per proposal; "none_yet" means no recommendation has been recorded.', byScoreStatus: 'Latest system score run; "manual_review" means data was missing and no score was produced.' } };
+    });
+  }
+
   // ---------- the decision-ready view (docs/10 §9, CRD-10) ----------
   async get(p: Principal, caseId: string) {
     return this.db.withTenant(p.institutionId, async (tx) => {
@@ -269,11 +380,13 @@ export class CreditService {
       const [pt, cl, cs] = await Promise.all([this.pinned<{ label: Loc }>(tx, inst, 'proposal_type', pr.proposal_type_version_id), this.pinned<{ name: string; items: Array<{ key: string; label: Loc; required: boolean }> }>(tx, inst, 'checklist', pr.checklist_version_id), this.pinned<CalculationSet>(tx, inst, 'calculation_set', pr.calculation_version_id)]);
       const card = pr.scorecard_version_id ? await this.pinned<Scorecard>(tx, inst, 'scorecard', pr.scorecard_version_id) : null;
       const parties = (await tx.query('SELECT id, role, name_enc, note, added_at FROM credit_party WHERE proposal_id=$1 ORDER BY added_at', [pr.id])).rows.map((r) => ({ partyId: r.id, role: r.role, name: decryptField(r.name_enc), note: r.note }));
-      const inputRows = (await tx.query('SELECT seq, key, value::text, as_of::text, source, evidence_note, entered_at FROM credit_input WHERE proposal_id=$1 ORDER BY seq', [pr.id])).rows;
-      const eff = this.effectiveInputs(inputRows);
+      const inputRows = (await tx.query('SELECT seq, key, value::text, as_of::text, source, evidence_note, entered_at, party_id FROM credit_input WHERE proposal_id=$1 ORDER BY seq', [pr.id])).rows;
+      const partyRefs = (await tx.query('SELECT id, role FROM credit_party WHERE proposal_id=$1', [pr.id])).rows as PartyRef[];
+      const eff = this.effectiveAll(inputRows, cs.content.inputs, partyRefs);
       const lastCalc = (await tx.query(`SELECT result, inputs_used, run_at FROM credit_assessment WHERE proposal_id=$1 AND kind='calculation' ORDER BY seq DESC LIMIT 1`, [pr.id])).rows[0];
       const lastScore = (await tx.query(`SELECT result, run_at FROM credit_assessment WHERE proposal_id=$1 AND kind='score' ORDER BY seq DESC LIMIT 1`, [pr.id])).rows[0];
       const answers = await this.latestAnswers(tx, pr.id);
+      const checks = (await tx.query(`SELECT DISTINCT ON (correlation_id) correlation_id, party_id, provider, status, result_ref, summary, error_code, requested_at FROM credit_external_check WHERE proposal_id=$1 ORDER BY correlation_id, seq DESC`, [pr.id])).rows;
       const rec = (await tx.query('SELECT * FROM credit_recommendation WHERE proposal_id=$1 ORDER BY seq DESC LIMIT 1', [pr.id])).rows[0];
       const conds = (await tx.query('SELECT id, kind, text, evidence_requirement, due_date::text due_date, status, cleared_at, (status=\'open\' AND due_date IS NOT NULL AND due_date < current_date) overdue FROM credit_condition WHERE proposal_id=$1 ORDER BY created_at', [pr.id])).rows;
       const maxSeq = inputRows.length ? Number(inputRows[inputRows.length - 1].seq) : 0;
@@ -285,12 +398,17 @@ export class CreditService {
         caseState: ctx.state, parties,
         inputDefinitions: cs.content.inputs, measureDefinitions: cs.content.measures.map((m) => ({ key: m.key, label: m.label })),
         inputs: Object.entries(eff).map(([key, v]) => ({ key, value: v.value, asOf: v.asOf, source: v.source, conflict: !!v.conflict })),
-        inputHistory: inputRows.map((r) => ({ key: r.key, value: trimZeros(r.value), asOf: r.as_of, source: r.source, note: r.evidence_note, at: r.entered_at })),
+        partyInputs: cs.content.inputs.filter((d) => d.scope === 'party').flatMap((d) => parties.filter((x) => d.partyRoles!.includes(x.role)).map((x) => {
+          const e = this.effectiveInputs(inputRows.filter((r) => r.key === d.key && r.party_id === x.partyId))[d.key];
+          return { key: d.key, partyId: x.partyId, role: x.role, value: e?.value ?? null, asOf: e?.asOf ?? null, source: e?.source ?? null, conflict: !!e?.conflict };
+        })),
+        inputHistory: inputRows.map((r) => ({ partyId: r.party_id, key: r.key, value: trimZeros(r.value), asOf: r.as_of, source: r.source, note: r.evidence_note, at: r.entered_at })),
         assessment: { calculation: lastCalc ? { ...(lastCalc.result as CalcResult), ranAt: lastCalc.run_at } : null, score: lastScore ? { ...(lastScore.result as ScoreResult), ranAt: lastScore.run_at } : null,
           outdated: lastCalc ? maxSeq > Number(lastCalc.inputs_used.maxInputSeq) : false, label: SYSTEM_LABEL },
         checklist: { name: cl.content.name, items, requiredUnanswered: items.filter((i) => i.required && i.answer === null).map((i) => i.key), notMet: items.filter((i) => i.answer === 'not_met').map((i) => i.key) },
         recommendation: rec ? { recommendation: rec.recommendation, rationale: rec.rationale, exceptions: rec.exceptions, mitigants: rec.mitigants, concerns: rec.concerns, scoreOverride: rec.score_override, at: rec.recommended_at, byMe: rec.recommended_by === p.userId } : null,
         conditions: conds.map((c) => ({ conditionId: c.id, kind: c.kind, text: c.text, evidenceRequirement: c.evidence_requirement, dueDate: c.due_date, status: c.status, overdue: c.overdue })),
+        externalChecks: checks.map((c) => ({ correlationId: c.correlation_id, partyId: c.party_id, provider: c.provider, status: c.status, resultRef: c.result_ref, summary: c.summary, errorCode: c.error_code, requestedAt: c.requested_at })),
         humanAndSystem: 'The recommendation is a person\'s judgement. The figures are system-generated. The decision is made by an authorised person in the approval step.',
       };
     });

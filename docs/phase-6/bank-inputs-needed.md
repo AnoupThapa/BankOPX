@@ -12,3 +12,12 @@ Everything in the repository's credit fixtures is invented (`core/src/credit/cre
 | Conditions policy | Who may clear which kind, evidence rules, due-date handling. |
 | External checks | CIB / bureau and other checks only through authorised systems and a lawful process (CRD-09); none is connected (A-038). |
 | Data rules | Retention periods, residency, who may see co-applicant and guarantor data. |
+
+## Added in Phase 6b
+| Item | Notes |
+|---|---|
+| External check providers | Which providers are authorised, for which services, what lawful basis applies, what the consent evidence must look like, and which summary fields the platform may keep (CRD-09). Provider selection and contracts are the bank's. |
+| Joint approval tiers | Thresholds and the number of approvers per tier, per workflow. Any rule about who may combine (roles, committees, alternates) is not modelled. |
+| Overdue conditions | Who owns an overdue condition and what happens next (task, notice, escalation). |
+| Per-party rules | Which party roles count for each input and how to combine them (sum, highest, lowest). Periods and statement-year logic are not modelled. |
+

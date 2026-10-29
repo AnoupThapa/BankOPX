@@ -103,8 +103,9 @@ describe('database integrity', () => {
     await owner.query(`CREATE DATABASE ${name}`);
     const url = process.env.MIGRATION_DATABASE_URL!.replace(/\/[^/]+$/, `/${name}`);
     try {
-      const all = ['0001_foundation', '0002_customer', '0003_forms_cases_documents', '0004_workflow', '0005_integration_pilot', '0006_credit_workspace'];
+      const all = ['0001_foundation', '0002_customer', '0003_forms_cases_documents', '0004_workflow', '0005_integration_pilot', '0006_credit_workspace', '0007_credit_extensions'];
       expect(await migrate(url, 'up')).toEqual(all);
+      expect(await migrate(url, 'down')).toEqual(['0007_credit_extensions']);
       expect(await migrate(url, 'down')).toEqual(['0006_credit_workspace']);
       expect(await migrate(url, 'down')).toEqual(['0005_integration_pilot']);
       expect(await migrate(url, 'down')).toEqual(['0004_workflow']);

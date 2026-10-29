@@ -5,6 +5,7 @@ import { join } from 'path';
 import { vi } from 'vitest';
 import { LocaleProvider } from '@bbjp/ui';
 import { CreditPanel } from './credit';
+import { PortfolioPage } from './portfolio';
 import { Handoffs } from './operations';
 import { PilotPage } from './pilot';
 import { Queue } from './queue';
@@ -22,7 +23,7 @@ describe('staff portal', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('every t(...) key used in the source exists', () => {
-    const src = ['App.tsx', 'queue.tsx', 'workspace.tsx', 'tat.tsx', 'operations.tsx', 'pilot.tsx', 'credit.tsx', 'cases.tsx'].map((f) => readFileSync(join(process.cwd(), 'src', f), 'utf8')).join('\n');
+    const src = ['App.tsx', 'queue.tsx', 'workspace.tsx', 'tat.tsx', 'operations.tsx', 'pilot.tsx', 'credit.tsx', 'cases.tsx', 'portfolio.tsx'].map((f) => readFileSync(join(process.cwd(), 'src', f), 'utf8')).join('\n');
     const keys = [...src.matchAll(/\bt\('([a-z_.]+)'\)/g)].map((m) => m[1]!);
     const shared = ['status.', 'priority.', 'internal.', 'field.', 'button.', 'form.', 'timeline.'];
     for (const k of keys) expect(k in EXTRA.en || shared.some((p) => k.startsWith(p))).toBe(true);
@@ -151,6 +152,15 @@ describe('staff portal', () => {
     expect(await axe(container)).toHaveNoViolations();
   });
 
+  it('every credit source, answer, state and kind the server can produce has wording', () => {
+    for (const k of ['staff_entered', 'customer_declared', 'document', 'external_check', 'resolution', 'party_aggregate']) expect(`credit.src.${k}` in EXTRA.en).toBe(true);
+    for (const k of ['requested', 'sent', 'received', 'failed', 'unavailable']) expect(`credit.xs.${k}` in EXTRA.en).toBe(true);
+    for (const k of ['used', 'missing_excluded', 'missing_zero', 'missing_referred']) expect(`credit.fs.${k}` in EXTRA.en).toBe(true);
+    for (const k of ['met', 'not_met', 'not_applicable']) expect(`credit.ans.${k}` in EXTRA.en).toBe(true);
+    for (const k of ['support', 'support_with_conditions', 'not_support']) expect(`credit.rec.${k}` in EXTRA.en).toBe(true);
+    for (const k of ['pre_disbursement', 'post_disbursement', 'covenant']) expect(`credit.kind.${k}` in EXTRA.en).toBe(true);
+  });
+
   it('every dynamic hand-off and pilot key the server can produce has wording', () => {
     for (const k of ['pending', 'sent', 'confirmed', 'failed', 'ambiguous', 'dead_letter']) expect(`ho.status.${k}` in EXTRA.en).toBe(true);
     for (const k of ['visits_per_request', 'end_to_end_tat_hours', 'resubmission_rate', 'handling_minutes']) expect(`pilot.metric.${k}` in EXTRA.en).toBe(true);
@@ -167,7 +177,7 @@ describe('staff portal', () => {
       score: { status: 'manual_review', score: null, displayLabel: 'System-generated; informational. Not a decision.', scorecard: { name: 'Demo card', label: 'informational', effectiveDate: '2026-01-01' }, missing: ['coverage'], reviewAction: null,
         factors: [{ key: 'coverage', group: 'repayment_capacity', label: L('Coverage'), weight: '0.6', value: null, points: null, state: 'missing_referred', reason: 'missing' }] }, outdated: true, label: 'System-generated figures support the review. They are not a decision and not a recommendation.' },
     checklist: { name: 'Demo checklist', items: [{ key: 'identity_kyc', label: L('Identity complete'), required: true, answer: null, note: null }], requiredUnanswered: ['identity_kyc'], notMet: [] },
-    recommendation: null, conditions: [{ conditionId: 'c1', kind: 'pre_disbursement', text: 'Insurance', evidenceRequirement: 'Policy copy', dueDate: '2020-01-01', status: 'open', overdue: true }], humanAndSystem: 'The recommendation is a person\'s judgement.', ...over });
+    partyInputs: [], externalChecks: [], recommendation: null, conditions: [{ conditionId: 'c1', kind: 'pre_disbursement', text: 'Insurance', evidenceRequirement: 'Policy copy', dueDate: '2020-01-01', status: 'open', overdue: true }], humanAndSystem: 'The recommendation is a person\'s judgement.', ...over });
   const creditFetch = (st: Partial<CreditStatus>, view: CreditView | null) => vi.stubGlobal('fetch', vi.fn(async (url: string) => (String(url).endsWith('/credit/status') ? json({ enabled: true, exists: !!view, canPrepare: true, proposalTypes: [{ key: 'type_one', label: L('Type one') }], ...st }) : json(view))));
 
   it('CRD-01, CRD-04, CRD-06, CRD-10: the credit panel labels system figures, shows missing data and "manual review" with no score, and offers no approve or decline', async () => {
@@ -232,6 +242,48 @@ describe('staff portal', () => {
     fireEvent.change(r, { target: { value: 'ok' } });
     fireEvent.click(screen.getByRole('button', { name: 'Record recommendation' }));
     expect(await screen.findByText('Answer every required checklist item first.')).toBeInTheDocument();
+  });
+
+  it('per-party inputs show each party\'s value and combination rule, and the entry form asks which party; a missing party value is shown as missing', async () => {
+    const view = cview({
+      inputDefinitions: [{ key: 'income', label: L('Annual income'), unit: 'money', scope: 'party', partyRoles: ['borrower', 'co_applicant'], aggregate: 'sum' }],
+      parties: [{ partyId: 'b', role: 'borrower', name: 'Bina Synthetic', note: null }, { partyId: 'c', role: 'co_applicant', name: 'Chandra Synthetic', note: null }, { partyId: 'g', role: 'guarantor', name: 'Gita Synthetic', note: null }],
+      inputs: [], partyInputs: [{ key: 'income', partyId: 'b', role: 'borrower', value: '600000', asOf: '2026-05-01', source: 'document', conflict: false }, { key: 'income', partyId: 'c', role: 'co_applicant', value: null, asOf: null, source: null, conflict: false }] });
+    creditFetch({}, view);
+    wrap(<CreditPanel caseId="c1" />);
+    await screen.findByText(/Per party, combined by: sum/);
+    expect(screen.getByText(/Bina Synthetic \(borrower\): 600000/)).toBeInTheDocument();
+    expect(screen.getByText(/Chandra Synthetic \(co applicant\): Missing/)).toBeInTheDocument();
+    const party = screen.getByLabelText('For which party') as HTMLSelectElement;
+    expect([...party.options].map((o) => o.text)).toEqual(['Bina Synthetic (borrower)', 'Chandra Synthetic (co applicant)']);   // guarantors are not counted for income
+  });
+
+  it('CRD-09: external checks need a lawful basis and consent evidence in the form; results show a reference and summary, never a report; no providers means no section', async () => {
+    const view = cview({ parties: [{ partyId: 'b', role: 'borrower', name: 'Bina Synthetic', note: null }],
+      externalChecks: [{ correlationId: 'x', partyId: 'b', provider: 'bureau_x', status: 'received', resultRef: 'REF-1', summary: { band: 'B' }, errorCode: null, requestedAt: '2026-06-01T00:00:00Z' }] });
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => (String(url).endsWith('/credit/status') ? json({ enabled: true, exists: true, canPrepare: true, proposalTypes: [], externalCheckProviders: ['bureau_x'] }) : json(view))));
+    const a = wrap(<CreditPanel caseId="c1" />);
+    await screen.findByRole('heading', { name: 'External checks' });
+    expect(screen.getByText('Result received')).toBeInTheDocument(); expect(screen.getByText(/REF-1/)).toBeInTheDocument(); expect(screen.getByText(/band: B/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Lawful basis for the check')).toBeRequired(); expect(screen.getByLabelText("Evidence of the customer's consent")).toBeRequired();
+    a.unmount();
+    creditFetch({}, cview());
+    wrap(<CreditPanel caseId="c1" />);
+    await screen.findByRole('heading', { name: 'Credit review' });
+    expect(screen.queryByRole('heading', { name: 'External checks' })).not.toBeInTheDocument();
+  });
+
+  it('the credit portfolio shows counts only, with definitions, and a plain refusal for people without access', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json({ asOf: '2030-01-01T00:00:00Z', proposals: 3, byCaseState: { in_review: 2, approved: 1 }, byRecommendation: { support: 1, none_yet: 2 }, byScoreStatus: { scored: 2, manual_review: 1 },
+      conditions: { open: 2, overdue: 1, cleared: 0 }, externalChecks: { received: 1 }, definitions: { byRecommendation: 'Latest recommendation per proposal.' } })));
+    const { container } = wrap(<PortfolioPage />);
+    await screen.findByRole('heading', { name: 'Credit portfolio' });
+    expect(screen.getByText('manual review')).toBeInTheDocument(); expect(screen.getByText(/^Overdue/)).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/BB-[A-Z2-9]{5}/);
+    expect(await axe(container)).toHaveNoViolations();
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ message: 'forbidden' }), { status: 403 })));
+    wrap(<PortfolioPage />);
+    expect(await screen.findByText('You do not have access to this page.')).toBeInTheDocument();
   });
 });
 

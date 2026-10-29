@@ -1,6 +1,6 @@
 import { ConfigValidator } from '../configuration';
 import { checkWorkedExamples, CalculationSet, Expr } from './calc';
-import { cmp, isDecimalText, parseDec } from './decimal';
+import { cmp, isDecimalText, parseDec } from '../platform';
 import { REVIEW_ACTIONS, SCORE_LABELS } from './scorecard';
 
 export const CREDIT_KINDS = ['proposal_type', 'checklist', 'calculation_set', 'scorecard'] as const;
@@ -61,6 +61,11 @@ export const creditValidator: ConfigValidator = (kind, c) => {
       if (typeof d.key !== 'string' || !KEY.test(d.key) || keys.has(d.key)) e.push(`CRD-03: input ${i} needs a unique key`); else keys.add(d.key);
       if (!loc(d.label)) e.push(`CRD-03: input ${i} needs English and Nepali text`);
       if (!['money', 'count', 'percent', 'ratio'].includes(String(d.unit))) e.push(`CRD-03: input ${i} unit is invalid`);
+      if (d.scope !== undefined && !['proposal', 'party'].includes(String(d.scope))) e.push(`CRD-02: input ${i} scope must be proposal or party`);
+      if (d.scope === 'party') {
+        if (!Array.isArray(d.partyRoles) || !d.partyRoles.length || !d.partyRoles.every((r) => typeof r === 'string' && KEY.test(r))) e.push(`CRD-02: input ${i} is per party and needs partyRoles`);
+        if (!['sum', 'max', 'min'].includes(String(d.aggregate))) e.push(`CRD-02: input ${i} is per party and needs aggregate (sum, max or min)`);
+      } else if (d.partyRoles !== undefined || d.aggregate !== undefined) e.push(`CRD-02: input ${i} sets partyRoles or aggregate without scope 'party'`);
       if (d.maxAgeDays !== undefined && (!Number.isInteger(d.maxAgeDays) || d.maxAgeDays < 1)) e.push(`CRD-04: input ${i} maxAgeDays must be a positive whole number`);
     }
     const mkeys = new Set<string>();

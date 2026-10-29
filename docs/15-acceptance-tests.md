@@ -501,6 +501,33 @@ Scenario: Credit data stays private   # [SEC-03, SEC-02]
   And the customer sees none of the credit file
 ```
 
+### L.2 Phase 6b additions (per-party inputs, external checks, joint approval, portfolio)
+
+```gherkin
+Scenario: Per-party inputs   # [CRD-02, CRD-04]
+  Given a calculation set with an input entered per party, combined by sum, max or min over configured party roles
+  Then a counted party without a value leaves the figure missing, not zero
+  And a contested party value contests the figure, and the combined figure carries the oldest date
+
+Scenario: External checks only through an authorised provider   # [CRD-09, ADR-017]
+  When an officer requests a check
+  Then a lawful basis, evidence of consent, a provider authorised for the service and a party are required
+  And the request is only recorded; a dispatcher calls the provider later, once
+  And the platform keeps a reference and summary fields, never the report or the subject details
+  And an unavailable or failing provider ends in a visible state with no provider text stored
+
+Scenario: Joint approval above a threshold   # [APR-03]
+  Given an approval node with tiers by amount
+  When the amount exceeds a threshold
+  Then that many different approvers must each approve, each with authority for the amount
+  And the case does not move, and nothing is handed off, until the last approval
+  And the same person cannot approve twice, and one decline by an authorised approver ends it
+
+Scenario: Overdue conditions and portfolio   # [docs/10 §6]
+  Then an overdue open condition is flagged once and audited
+  And the portfolio shows counts for the viewer's branches only, with definitions and no identities
+```
+
 ## K. Phase exit-gate checklists
 
 ### Phase 1 — Architecture, security foundation

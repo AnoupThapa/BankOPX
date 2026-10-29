@@ -320,6 +320,11 @@ export class CaseService {
     const c = (await tx.query('SELECT * FROM app_case WHERE id=$1', [caseId])).rows[0];
     return c ? { caseId: c.id, institutionId: c.institution_id, serviceKey: c.service_key, serviceVersionId: c.service_version_id, branchId: c.branch_id, profileId: c.profile_id, formVersionId: c.form_version_id, state: c.internal_state, workflowVersionId: c.workflow_version_id, trackingCode: c.tracking_code } : null;
   }
+  /** Internal state per case id, for read-only summaries by other modules (no joins across module tables). */
+  async statesOf(tx: Tx, caseIds: string[]): Promise<Map<string, string>> {
+    if (!caseIds.length) return new Map();
+    return new Map((await tx.query('SELECT id, internal_state FROM app_case WHERE id = ANY($1::uuid[])', [caseIds])).rows.map((r) => [r.id as string, r.internal_state as string]));
+  }
   async attachWorkflow(tx: Tx, caseId: string, workflowVersionId: string) { await tx.query('UPDATE app_case SET workflow_version_id=$2 WHERE id=$1 AND workflow_version_id IS NULL', [caseId, workflowVersionId]); }
   async latestData(tx: Tx, caseId: string): Promise<Record<string, unknown>> {
     const r = (await tx.query('SELECT data_enc FROM application_snapshot WHERE case_id=$1 ORDER BY version DESC LIMIT 1', [caseId])).rows[0];
