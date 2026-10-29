@@ -121,3 +121,16 @@ export function holdsPermission(p: Principal, permission: Permission, now: Date 
   ];
   return grants.some((r) => ROLES[r]?.permissions.includes(permission) && ROLES[r]?.actorTypes.includes(p.actorType));
 }
+
+/**
+ * Branch ids a principal may use for a scoped permission, for filtering lists at query level (ADR-011). Empty means none, never all.
+ * Mirrors `decide`: live assignments and delegations of roles that grant the permission with that scope.
+ */
+export function scopedBranchIds(p: Principal, permission: Permission, now: Date = new Date()): string[] {
+  if (!holdsPermission(p, permission, now)) return [];
+  const ids = new Set<string>();
+  const roleOk = (role: string) => !!ROLES[role]?.permissions.includes(permission) && !!ROLES[role]?.actorTypes.includes(p.actorType) && !!ROLES[role]?.scoped.includes(permission);
+  for (const a of p.assignments) if (live(a, now) && roleOk(a.role) && !(ROLES[a.role]?.highRisk && (!a.approvedBy || a.approvedBy === a.userId || a.approvedBy === a.grantedBy))) a.branchIds.forEach((b) => ids.add(b));
+  for (const d of p.delegations) if (live(d, now) && roleOk(d.role)) d.branchIds.forEach((b) => ids.add(b));
+  return [...ids];
+}

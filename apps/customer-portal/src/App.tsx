@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button, LocaleProvider, StatusBadge, Tag, TextField, useLocale, useT } from '@bbjp/ui';
 import type { Locale } from '@bbjp/ui';
 import './portal.css';
-import { api, ApiError, Localised, Notice, Profile, Service, setCsrf } from './api';
+import { api, ApiError, Localised, Notice, Profile, Receipt, Service, setCsrf } from './api';
+import { ApplicationView, CaseView, CasesView, ReceiptView } from './applications';
 import { EXTRA } from './messages';
 
-type View = { name: 'home' } | { name: 'link' } | { name: 'catalogue' } | { name: 'service'; key: string };
+type View = { name: 'home' } | { name: 'link' } | { name: 'catalogue' } | { name: 'service'; key: string } | { name: 'apply'; key: string }
+  | { name: 'receipt'; receipt: Receipt } | { name: 'cases' } | { name: 'case'; id: string };
 
 export function App() {
   const [locale, setLocale] = useState<Locale>('en');
@@ -35,6 +37,7 @@ function Shell({ locale, setLocale }: { locale: Locale; setLocale: (l: Locale) =
           {profile && profile !== 'loading' && profile.completionState === 'consent_recorded' && (<>
             <Button variant="secondary" onClick={() => setView({ name: 'home' })}>{t('nav.home')}</Button>
             <Button variant="secondary" onClick={() => setView({ name: 'catalogue' })}>{t('nav.services')}</Button>
+            <Button variant="secondary" onClick={() => setView({ name: 'cases' })}>{t('nav.applications')}</Button>
           </>)}
           {profile && profile !== 'loading' && <Button variant="secondary" onClick={async () => {
             // Only show "signed out" once the server has revoked the session; otherwise say so (IDN-09).
@@ -51,7 +54,11 @@ function Shell({ locale, setLocale }: { locale: Locale; setLocale: (l: Locale) =
           : view.name === 'home' ? <Home profile={profile} go={setView} />
           : view.name === 'link' ? <Link onDone={async () => { await refresh(); setView({ name: 'home' }); }} />
           : view.name === 'catalogue' ? <Catalogue locale={locale} go={setView} />
-          : <ServiceView key={view.key} locale={locale} serviceKey={view.key} go={setView} />}
+          : view.name === 'service' ? <ServiceView key={view.key} locale={locale} serviceKey={view.key} go={setView} />
+          : view.name === 'apply' ? <ApplyLoader key={view.key} serviceKey={view.key} go={setView} />
+          : view.name === 'receipt' ? <ReceiptView receipt={view.receipt} toApplications={() => setView({ name: 'cases' })} />
+          : view.name === 'cases' ? <CasesView open={(id) => setView({ name: 'case', id })} />
+          : <CaseView key={view.id} caseId={view.id} back={() => setView({ name: 'cases' })} />}
       </main>
     </div>
   );
@@ -201,14 +208,19 @@ function Catalogue({ locale, go }: { locale: Locale; go: (v: View) => void }) {
   );
 }
 
+function ApplyLoader({ serviceKey, go }: { serviceKey: string; go: (v: View) => void }) {
+  const [svc, setSvc] = useState<Service | null>(null);
+  useEffect(() => { void api.service(serviceKey).then(setSvc); }, [serviceKey]);
+  const t = useT();
+  if (!svc) return <p role="status">{t('common.loading')}</p>;
+  return <ApplicationView service={svc} back={() => go({ name: 'service', key: serviceKey })} onReceipt={(receipt) => go({ name: 'receipt', receipt })} />;
+}
+
 function ServiceView({ locale, serviceKey, go }: { locale: Locale; serviceKey: string; go: (v: View) => void }) {
   const t = useT();
   const [s, setS] = useState<Service | null>(null);
-  const [note, setNote] = useState(''); const [saved, setSaved] = useState(false);
-  useEffect(() => {
-    void api.service(serviceKey).then(setS);
-    void api.getDraft(serviceKey).then((d) => setNote(d.data.note ?? '')).catch(() => undefined);
-  }, [serviceKey]);
+  const [hasDraft, setHasDraft] = useState(false);
+  useEffect(() => { void api.service(serviceKey).then(setS); void api.applicationDraft(serviceKey).then((d) => setHasDraft(d.pinned)).catch(() => undefined); }, [serviceKey]);
   if (!s) return <p role="status">{t('common.loading')}</p>;
   return (
     <section aria-labelledby="svc-h">
@@ -224,14 +236,9 @@ function ServiceView({ locale, serviceKey, go }: { locale: Locale; serviceKey: s
         <dt>{t('service.support')}</dt><dd>{L(s.supportChannel, locale)}</dd>
       </dl>
       <p className="status">{t('service.notapproval')}</p>
-      {!s.canStart ? <p className="status">{t('service.needlink')}</p> : (
-        <form onSubmit={async (e) => { e.preventDefault(); await api.saveDraft(serviceKey, { note }); setSaved(true); }}>
-          <label htmlFor="note">{t('service.note')}</label>
-          <textarea id="note" value={note} onChange={(e) => { setNote(e.target.value); setSaved(false); }} />
-          <p><Button type="submit">{t('service.savedraft')}</Button></p>
-          {saved && <p role="status">{t('service.saved')}</p>}
-        </form>
-      )}
+      {!s.canStart ? <p className="status">{t('service.needlink')}</p>
+        : s.formKey ? <Button onClick={() => go({ name: 'apply', key: serviceKey })}>{hasDraft ? t('app.resume') : t('app.start')}</Button>
+        : <p className="status">{t('app.notonform')}</p>}
     </section>
   );
 }

@@ -21,7 +21,7 @@ beforeAll(async () => {
 afterAll(async () => { await app.close(); });
 
 async function draftAndSubmit(key: string, content: object, reason = 'initial') {
-  const d = await post(maker, '/config/drafts', { kind: 'form', key, content, reason }).expect(201);
+  const d = await post(maker, '/config/drafts', { kind: 'widget', key, content, reason }).expect(201);
   await post(maker, `/config/versions/${d.body.id}/submit`, { reason: 'ready' }).expect(201);
   return d.body as { id: string; definitionId: string; version: number };
 }
@@ -37,7 +37,7 @@ describe('configuration governance', () => {
   });
 
   it('CFG-01/SEC-07: role separation - a checker cannot author drafts; the denial is audited', async () => {
-    const d = await post(checker, '/config/drafts', { kind: 'form', key: 'f-self', content: { a: 1 }, reason: 'x' });
+    const d = await post(checker, '/config/drafts', { kind: 'widget', key: 'f-self', content: { a: 1 }, reason: 'x' });
     expect(d.status).toBe(403);
     const n = await asTenant(seed.instId, (q) => q(`SELECT count(*)::int n FROM audit_event WHERE action='access.denied' AND actor_id=$1`, [seed.users.checker!.id]));
     expect(n.rows[0].n).toBeGreaterThan(0);
@@ -54,7 +54,7 @@ describe('configuration governance', () => {
   });
 
   it('CFG-02: change reason is mandatory', async () => {
-    await post(maker, '/config/drafts', { kind: 'form', key: 'f-noreason', content: {}, reason: '  ' }).expect(400);
+    await post(maker, '/config/drafts', { kind: 'widget', key: 'f-noreason', content: {}, reason: '  ' }).expect(400);
   });
 
   it('FRM-03/WFL-07: a published version is immutable at the database level; only retirement is allowed', async () => {
@@ -72,16 +72,16 @@ describe('configuration governance', () => {
     await post(checker, `/config/versions/${d2.id}/approve`, { reason: 'ok' }).expect(201);
     const v1 = await checker.agent.get(`/config/versions/${d1.id}`).expect(200);
     expect(v1.body).toMatchObject({ status: 'retired', content: { v: 1 } });
-    const current = await app.get(ConfigService).getPublished(seed.instId, 'form', 'f-pin');
+    const current = await app.get(ConfigService).getPublished(seed.instId, 'widget', 'f-pin');
     expect(current).toMatchObject({ version: 2, content: { v: 2 } });
   });
 
   it('CFG-03: publication is blocked when the regression pack fails', async () => {
-    app.get(ConfigValidatorRegistry).register((kind, c) => ({ ok: kind !== 'form' || c.broken !== true, errors: kind === 'form' && c.broken === true ? ['regression: broken form'] : [] }));
+    app.get(ConfigValidatorRegistry).register((kind, c) => ({ ok: kind !== 'widget' || c.broken !== true, errors: kind === 'widget' && c.broken === true ? ['regression: broken form'] : [] }));
     const d = await draftAndSubmit('f-broken', { broken: true });
     const r = await post(checker, `/config/versions/${d.id}/approve`, { reason: 'try' }).expect(400);
     expect(JSON.stringify(r.body)).toContain('regression: broken form');
-    expect(await app.get(ConfigService).getPublished(seed.instId, 'form', 'f-broken')).toBeNull();
+    expect(await app.get(ConfigService).getPublished(seed.instId, 'widget', 'f-broken')).toBeNull();
   });
 
   it('CFG-07: admins cannot configure away mandatory controls or approval authority', async () => {
@@ -97,9 +97,9 @@ describe('configuration governance', () => {
     await post(checker, `/config/versions/${d2.id}/approve`, { reason: 'ok' }).expect(201);
     const rb = await post(maker, `/config/definitions/${d1.definitionId}/rollback`, { toVersion: d1.version, reason: 'bad release' }).expect(201);
     expect(rb.body.version).toBe(3);
-    expect((await app.get(ConfigService).getPublished(seed.instId, 'form', 'f-rollback'))?.content).toEqual({ v: 'bad' }); // not live until approved
+    expect((await app.get(ConfigService).getPublished(seed.instId, 'widget', 'f-rollback'))?.content).toEqual({ v: 'bad' }); // not live until approved
     await post(checker2, `/config/versions/${rb.body.id}/approve`, { reason: 'rollback approved' }).expect(201);
-    expect((await app.get(ConfigService).getPublished(seed.instId, 'form', 'f-rollback'))?.content).toEqual({ v: 'good' });
+    expect((await app.get(ConfigService).getPublished(seed.instId, 'widget', 'f-rollback'))?.content).toEqual({ v: 'good' });
   });
 
   it('CFG-04: emergency-disable stops serving config immediately, restricted to checkers, and is audited', async () => {
@@ -107,13 +107,13 @@ describe('configuration governance', () => {
     await post(checker, `/config/versions/${d.id}/approve`, { reason: 'ok' }).expect(201);
     await post(maker, `/config/definitions/${d.definitionId}/disable`, { disabled: true, reason: 'incident' }).expect(403);
     await post(checker, `/config/definitions/${d.definitionId}/disable`, { disabled: true, reason: 'incident 42' }).expect(201);
-    expect(await app.get(ConfigService).getPublished(seed.instId, 'form', 'f-kill')).toBeNull();
+    expect(await app.get(ConfigService).getPublished(seed.instId, 'widget', 'f-kill')).toBeNull();
     const n = await asTenant(seed.instId, (q) => q(`SELECT count(*)::int n FROM audit_event WHERE action='config.emergency_disabled'`));
     expect(n.rows[0].n).toBe(1);
   });
 
   it('state machine: cannot approve a draft, cannot submit twice', async () => {
-    const d = await post(maker, '/config/drafts', { kind: 'form', key: 'f-states', content: {}, reason: 'x' }).expect(201);
+    const d = await post(maker, '/config/drafts', { kind: 'widget', key: 'f-states', content: {}, reason: 'x' }).expect(201);
     await post(checker, `/config/versions/${d.body.id}/approve`, { reason: 'skip review' }).expect(409);
     await post(maker, `/config/versions/${d.body.id}/submit`, { reason: 'x' }).expect(201);
     await post(maker, `/config/versions/${d.body.id}/submit`, { reason: 'x' }).expect(409);
@@ -121,10 +121,10 @@ describe('configuration governance', () => {
 
   it('FRM-10/INT-02: draft creation is idempotent per key; same key with a different payload is rejected', async () => {
     const h = { 'idempotency-key': 'k-123' };
-    const a = await post(maker, '/config/drafts', { kind: 'form', key: 'f-idem', content: { a: 1 }, reason: 'r' }, h).expect(201);
-    const b = await post(maker, '/config/drafts', { kind: 'form', key: 'f-idem', content: { a: 1 }, reason: 'r' }, h).expect(201);
+    const a = await post(maker, '/config/drafts', { kind: 'widget', key: 'f-idem', content: { a: 1 }, reason: 'r' }, h).expect(201);
+    const b = await post(maker, '/config/drafts', { kind: 'widget', key: 'f-idem', content: { a: 1 }, reason: 'r' }, h).expect(201);
     expect(b.body.id).toBe(a.body.id);
-    await post(maker, '/config/drafts', { kind: 'form', key: 'f-idem', content: { a: 2 }, reason: 'r' }, h).expect(409);
+    await post(maker, '/config/drafts', { kind: 'widget', key: 'f-idem', content: { a: 2 }, reason: 'r' }, h).expect(409);
     const n = await asTenant(seed.instId, (q) => q(`SELECT count(*)::int n FROM config_version v JOIN config_definition d ON d.id=v.definition_id WHERE d.key='f-idem'`));
     expect(n.rows[0].n).toBe(1);
   });
@@ -160,5 +160,29 @@ describe('configuration governance', () => {
     const body = { fromUser: seed.users.officer!.id, toUser: seed.users.bystander!.id, role: 'branch_officer', branchIds: [seed.branchB], maxAmount: null,
       validFrom: new Date().toISOString(), validTo: new Date(Date.now() + 3600_000).toISOString(), reason: 'cover' };
     await post(s1, '/admin/delegations', body).expect(400); // officer only holds branch A
+  });
+});
+
+describe('review queue (CFG-02, CFG-03)', () => {
+  it('lists versions waiting for review with the diff against the live version and any publish blockers; drafts are not listed', async () => {
+    const live = await draftAndSubmit('q-live', { a: 1, b: 2 }, 'v1');
+    await post(checker, `/config/versions/${live.id}/approve`, { reason: 'ok' }).expect(201);
+    const next = await draftAndSubmit('q-live', { a: 1, b: 5, c: { bypassApprovalAuthority: true } }, 'change b');
+    await post(maker, '/config/drafts', { kind: 'widget', key: 'q-draft-only', content: {}, reason: 'draft' }).expect(201);
+    const q = (await checker.agent.get('/config/review-queue?kind=widget').expect(200)).body;
+    const item = q.find((x: { id: string }) => x.id === next.id);
+    expect(item).toMatchObject({ key: 'q-live', version: 2, reason: 'change b', makerId: seed.users.maker!.id });
+    expect(item.diff).toMatchObject({ b: { from: 2, to: 5 } }); expect(item.isNew).toBe(false);
+    const fresh = await draftAndSubmit('q-brand-new', { z: 1 }, 'first');
+    expect((await checker.agent.get('/config/review-queue?kind=widget').expect(200)).body.find((x: { id: string }) => x.id === fresh.id).isNew).toBe(true);
+    expect(JSON.stringify(item.blockers)).toContain('CFG-07');
+    expect(q.some((x: { key: string }) => x.key === 'q-draft-only')).toBe(false);
+  });
+  it('is closed to people without config.read and invisible across tenants', async () => {
+    const other = await seedInstitution([{ name: 'om2', actor: 'admin', role: 'config_maker' }, { name: 'ofc', actor: 'staff', role: 'branch_officer', branch: 'A' }]);
+    const s = await signIn(app, other, 'ofc');
+    await s.agent.get('/config/review-queue').expect(403);
+    const om = await signIn(app, other, 'om2');
+    expect(JSON.stringify((await om.agent.get('/config/review-queue').expect(200)).body)).not.toContain('q-live');
   });
 });

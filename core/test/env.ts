@@ -6,3 +6,4 @@ process.env.LOGIN_RATE_MAX = '1000';
 process.env.LOOKUP_HMAC_KEY = 'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210'; // test-only key
 process.env.TRUST_PROXY = 'true'; // tests give each simulated client its own address via X-Forwarded-For
 process.env.OTP_ROUTE_RATE_MAX = '100000';
+process.env.OTP_MAX_PER_IP_HOUR = '100000';   // individual tests lower it to exercise the cap

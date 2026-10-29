@@ -5,5 +5,5 @@ import { IdentityAccessModule } from '../identity-access';
 import { CatalogueController } from './catalogue.controller';
 import { CatalogueService } from './catalogue.service';
 
-@Module({ imports: [ConfigurationModule, CustomerProfileModule, IdentityAccessModule], controllers: [CatalogueController], providers: [CatalogueService] })
+@Module({ imports: [ConfigurationModule, CustomerProfileModule, IdentityAccessModule], controllers: [CatalogueController], providers: [CatalogueService], exports: [CatalogueService] })
 export class ServiceCatalogueModule {}

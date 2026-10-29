@@ -160,6 +160,42 @@ export class ConfigService {
     });
   }
 
+  /**
+   * Content of a version that cases and drafts have pinned. Published or retired versions only; drafts and in-review versions are never
+   * served to runtime callers (FRM-03, WFL-07). A retired version stays readable so in-flight work keeps its rules.
+   */
+  async getPinnedVersion(institutionId: string, kind: string, id: string): Promise<{ id: string; key: string; version: number; contentHash: string; content: Record<string, unknown> } | null> {
+    if (!/^[0-9a-f-]{36}$/.test(String(id))) return null;
+    return this.db.withTenant(institutionId, async (tx) => {
+      const r = (await tx.query(
+        `SELECT v.id, d.key, v.version, v.content_hash, v.content FROM config_version v JOIN config_definition d ON d.id=v.definition_id
+         WHERE v.id=$1 AND d.kind=$2 AND v.status IN ('published','retired')`, [id, kind])).rows[0];
+      return r ? { id: r.id, key: r.key, version: r.version, contentHash: r.content_hash, content: r.content } : null;
+    });
+  }
+
+  /** Dry run of the regression pack for a draft the caller may read: lets designers see publish blockers before review (CFG-03). */
+  async validateDraft(p: Principal, kind: string, content: Record<string, unknown>) {
+    await this.access.authorize(p, 'config.draft', { institutionId: p.institutionId });
+    return this.validators.run(kind, content);
+  }
+
+  /** Versions waiting for a checker, with the change against the live version so the reviewer sees exactly what changes (CFG-02). */
+  async reviewQueue(p: Principal, kind?: string) {
+    await this.access.authorize(p, 'config.read', { institutionId: p.institutionId });
+    return this.db.withTenant(p.institutionId, async (tx) => {
+      const rows = (await tx.query(
+        `SELECT v.id, v.version, v.content, v.change_reason, v.maker_id, v.created_at, d.id definition_id, d.kind, d.key,
+                (SELECT content FROM config_version x WHERE x.definition_id=d.id AND x.status='published') live
+           FROM config_version v JOIN config_definition d ON d.id=v.definition_id WHERE v.status='in_review' AND ($1::text IS NULL OR d.kind=$1) ORDER BY v.created_at`, [kind ?? null])).rows;
+      const validation = (r: { kind: string; content: Record<string, unknown> }) => this.validators.run(r.kind, r.content);
+      return rows.map((r) => ({
+        id: r.id, definitionId: r.definition_id, kind: r.kind, key: r.key, version: r.version, reason: r.change_reason, makerId: r.maker_id, createdAt: r.created_at,
+        content: r.content, isNew: r.live == null, diff: diff(r.live ?? undefined, r.content), blockers: validation(r).errors,
+      }));
+    });
+  }
+
   async getVersion(p: Principal, id: string) {
     await this.access.authorize(p, 'config.read', { institutionId: p.institutionId });
     return this.db.withTenant(p.institutionId, async (tx) => {

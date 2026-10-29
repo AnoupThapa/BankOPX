@@ -134,3 +134,14 @@ Phase reports and evidence live in `docs/phase-1/`. New ADRs go in `adr/`.
 ```
 
 `core/dev/dev-server.ts` is for local development only: it refuses to run in production and uses a fake OTP provider and a fake core-banking record. Browser checks: `NODE_PATH=$(npm root -g) DEV_LOG=<dev server log> node apps/customer-portal/e2e/run.mjs` (needs Playwright).
+
+### Running the admin portal and the full browser walkthrough (Phase 3)
+
+```bash
+(cd core && DEV_SECRETS_FILE=/tmp/bbjp-dev-secrets.json npx ts-node dev/dev-server.ts)   # also writes synthetic staff logins (maker, checker, officerA) to that file
+(cd apps/admin-portal && npx vite --host 127.0.0.1)                                       # staff portal on :5174
+(cd apps/customer-portal && npx vite --host 127.0.0.1)                                    # customer portal on :5173
+NODE_PATH=$(npm root -g) DEV_LOG=<dev server log> DEV_SECRETS_FILE=/tmp/bbjp-dev-secrets.json node apps/customer-portal/e2e/forms-documents.mjs
+```
+
+The dev server uses a local-disk object store and a test-string malware scanner. Neither is a production control.

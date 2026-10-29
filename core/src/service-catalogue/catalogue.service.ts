@@ -33,7 +33,7 @@ export class CatalogueService implements OnModuleInit {
   private view(v: { id: string; key: string; version: number; content: Record<string, unknown> }, linked: boolean) {
     const c = v.content;
     return {
-      key: v.key, version: v.version, serviceVersionId: v.id,
+      key: v.key, version: v.version, serviceVersionId: v.id, formKey: (c.formKey as string | undefined) ?? null,
       title: c.title, description: c.description, whoCanApply: c.whoCanApply, fees: c.fees, documents: c.documents, supportChannel: c.supportChannel,
       indicativeTat: c.indicativeTat ?? null, signatureSupport: c.signatureSupport,
       remoteClass: c.remoteClass, visitReason: c.visitReason ?? null,                 // SVC-01/02: shown before the application starts

@@ -51,6 +51,15 @@ describe('database integrity', () => {
     await db.onModuleDestroy();
   });
 
+  it('ADR-021: the chain verifies when details have several keys in any order, nested objects and arrays (jsonb reorders keys)', async () => {
+    const s = await seedInstitution([]);
+    const db = new Db(); const audit = new AuditService(db);
+    await audit.recordStandalone({ institutionId: s.instId, actorType: 'staff', action: 'x', detail: { zebra: 1, alpha: { y: 2, b: [3, { q: 1, a: 2 }] }, middle: 'm', k: null } });
+    await audit.recordStandalone({ institutionId: s.instId, actorType: 'staff', action: 'y', detail: { permission: 'case.read', reason: 'out_of_scope', a: true } });
+    expect(await audit.verifyChain(s.instId)).toMatchObject({ intact: true, count: 2 });
+    await db.onModuleDestroy();
+  });
+
   it('chain stays linear under concurrent writers', async () => {
     const s = await seedInstitution([]);
     const db = new Db(); const audit = new AuditService(db);
@@ -86,10 +95,12 @@ describe('database integrity', () => {
     await owner.query(`CREATE DATABASE ${name}`);
     const url = process.env.MIGRATION_DATABASE_URL!.replace(/\/[^/]+$/, `/${name}`);
     try {
-      expect(await migrate(url, 'up')).toEqual(['0001_foundation', '0002_customer']);
+      const all = ['0001_foundation', '0002_customer', '0003_forms_cases_documents'];
+      expect(await migrate(url, 'up')).toEqual(all);
+      expect(await migrate(url, 'down')).toEqual(['0003_forms_cases_documents']);
       expect(await migrate(url, 'down')).toEqual(['0002_customer']);
       expect(await migrate(url, 'down')).toEqual(['0001_foundation']);
-      expect(await migrate(url, 'up')).toEqual(['0001_foundation', '0002_customer']);
+      expect(await migrate(url, 'up')).toEqual(all);
     } finally { await owner.query(`DROP DATABASE ${name}`); }
   });
 });
