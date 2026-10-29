@@ -20,7 +20,7 @@ Migration `0004` (reversible). Scenarios written first: `docs/15` sections A.2, 
 | Check | Result |
 |---|---|
 | Backend tests (Jest, 15 suites) | 267 passed |
-| UI library / customer portal / admin portal / staff portal (Vitest, axe) | 23 / 9 / 5 / 7 passed (as printed by `npm run ci`; suites are listed in that order of package) |
+| UI library / customer portal / admin portal / staff portal (Vitest, axe) | 23, 9, 5 and 7 tests passed in the four packages respectively (UI library, plus three portals; see `npm run ci` output) |
 | Browser end-to-end `apps/customer-portal/e2e/workflow.mjs` (customer applies, officer claims and returns, customer corrects, parallel checks, under-limit approver refused, authorised approver decides, customer sees decision, notifications, TAT page) | 26 of 26 checks passed on a fresh database |
 | Lint, typecheck | clean |
 | Traceability (`phase4` gate list) | every gate rule cited by at least one test |

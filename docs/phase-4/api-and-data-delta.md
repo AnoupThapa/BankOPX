@@ -12,5 +12,6 @@ Config kind added: `workflow`. Service schema now validates `formKey` and `workf
 | GET `/staff/cases/:id/workspace` | Case, form fields, changed fields, history, tasks |
 | GET `/staff/tat/summary` | Median / P90 / P95, customer wait separate |
 | POST `/ops/escalations/run` | Manual escalation evaluation |
+| POST `/customer/notifications/:id/read` | Mark own notification read |
 | GET `/customer/notifications` | Own notifications (generic wording) |
-| GET `/customer/applications/:id/timeline` | Customer-facing progress timeline |
+| GET `/customer/cases/:id/timeline` | Customer-facing progress timeline |
