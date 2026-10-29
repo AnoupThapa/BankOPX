@@ -3,13 +3,14 @@ import { Button, LocaleProvider, TextField, useT } from '@bbjp/ui';
 import './staff.css';
 import { api } from './api';
 import { EXTRA } from './messages';
+import { CasesPage } from './cases';
 import { Handoffs } from './operations';
 import { PilotPage } from './pilot';
 import { Queue } from './queue';
 import { TatPage } from './tat';
 import { CaseWorkspace } from './workspace';
 
-type View = { name: 'queue' } | { name: 'tat' } | { name: 'handoffs' } | { name: 'pilot' } | { name: 'case'; id: string };
+type View = { name: 'queue' } | { name: 'cases' } | { name: 'tat' } | { name: 'handoffs' } | { name: 'pilot' } | { name: 'case'; id: string };
 
 export function App() { return <LocaleProvider locale="en" extra={EXTRA}><Shell /></LocaleProvider>; }
 
@@ -24,6 +25,7 @@ function Shell() {
         <strong>{t('app.title')}</strong>
         <nav aria-label={t('app.title')}>
           <Button variant={view.name === 'queue' ? 'primary' : 'secondary'} aria-pressed={view.name === 'queue'} onClick={() => setView({ name: 'queue' })}>{t('nav.queue')}</Button>
+          <Button variant={view.name === 'cases' ? 'primary' : 'secondary'} aria-pressed={view.name === 'cases'} onClick={() => setView({ name: 'cases' })}>{t('nav.cases')}</Button>
           <Button variant={view.name === 'tat' ? 'primary' : 'secondary'} aria-pressed={view.name === 'tat'} onClick={() => setView({ name: 'tat' })}>{t('nav.tat')}</Button>
           <Button variant={view.name === 'handoffs' ? 'primary' : 'secondary'} aria-pressed={view.name === 'handoffs'} onClick={() => setView({ name: 'handoffs' })}>{t('nav.handoffs')}</Button>
           <Button variant={view.name === 'pilot' ? 'primary' : 'secondary'} aria-pressed={view.name === 'pilot'} onClick={() => setView({ name: 'pilot' })}>{t('nav.pilot')}</Button>
@@ -31,7 +33,7 @@ function Shell() {
         </nav>
       </header>
       <main>
-        {view.name === 'queue' ? <Queue open={(id) => setView({ name: 'case', id })} /> : view.name === 'tat' ? <TatPage /> : view.name === 'handoffs' ? <Handoffs /> : view.name === 'pilot' ? <PilotPage /> : <CaseWorkspace key={view.id} caseId={view.id} back={() => setView({ name: 'queue' })} />}
+        {view.name === 'queue' ? <Queue open={(id) => setView({ name: 'case', id })} /> : view.name === 'cases' ? <CasesPage open={(id) => setView({ name: 'case', id })} /> : view.name === 'tat' ? <TatPage /> : view.name === 'handoffs' ? <Handoffs /> : view.name === 'pilot' ? <PilotPage /> : <CaseWorkspace key={view.id} caseId={view.id} back={() => setView({ name: 'queue' })} />}
       </main>
     </div>
   );

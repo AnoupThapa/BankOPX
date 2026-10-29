@@ -16,9 +16,10 @@ import { FormsModule } from './forms';
 import { IntegrationModule } from './integration';
 import { PilotModule } from './pilot';
 import { SchedulerModule } from './scheduler';
+import { CreditModule } from './credit';
 
 @Module({
-  imports: [PlatformModule, AuditModule, IdentityAccessModule, ConfigurationModule, CustomerProfileModule, ServiceCatalogueModule, FormsModule, DocumentEvidenceModule, CaseModule, TatSlaModule, NotificationModule, WorkflowModule, IntegrationModule, PilotModule, SchedulerModule],
+  imports: [PlatformModule, AuditModule, IdentityAccessModule, ConfigurationModule, CustomerProfileModule, ServiceCatalogueModule, FormsModule, DocumentEvidenceModule, CaseModule, TatSlaModule, NotificationModule, WorkflowModule, IntegrationModule, PilotModule, SchedulerModule, CreditModule],
   controllers: [HealthController, AuditController],
 })
 export class AppModule {}

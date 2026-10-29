@@ -29,7 +29,7 @@ describe('architecture rules (module boundaries)', () => {
       'customer-profile': ['customer_profile', 'customer_contact', 'customer_field_value', 'otp_challenge', 'otp_request_log', 'consent_record', 'customer_draft'],
       'service-catalogue': [], forms: [],
       case: ['app_case', 'case_transition', 'application_snapshot', 'info_request', 'case_note'],
-      workflow: ['workflow_instance', 'case_task', 'approval'], 'tat-sla': ['tat_event'], notification: ['notification'], integration: ['integration_request', 'integration_event'], pilot: ['pilot_baseline'],
+      workflow: ['workflow_instance', 'case_task', 'approval'], 'tat-sla': ['tat_event'], notification: ['notification'], integration: ['integration_request', 'integration_event'], pilot: ['pilot_baseline'], credit: ['credit_proposal', 'credit_party', 'credit_input', 'credit_assessment', 'credit_checklist_answer', 'credit_recommendation', 'credit_condition'],
       'document-evidence': ['document', 'document_version', 'document_review', 'document_access_event'], platform: ['idempotency_record', 'schema_migration'],
     };
     const violations: string[] = [];

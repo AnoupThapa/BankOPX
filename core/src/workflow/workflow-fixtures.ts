@@ -31,3 +31,14 @@ export const PILOT_CERTIFICATE_WORKFLOW = (): WorkflowDef => ({
     declined_end: { type: 'end', outcome: 'declined', customerMessage: L('A decision has been made on your request. Please sign in to read it.') },
   },
 });
+
+/** Credit review: one preparation step by a credit officer, then approval against the requested amount, by a different person (APR-02, APR-03). SLA hours are placeholders [BANK-DECIDES]. */
+export const CREDIT_REVIEW_WORKFLOW = (): WorkflowDef => ({
+  start: 'review',
+  nodes: {
+    review: { type: 'task', title: L('Credit review'), permission: 'case.review', queue: 'credit', customerStatus: 'under_review', sla: sla(48), canReturn: true, outcomes: { complete: 'approval' } },
+    approval: { type: 'approval', title: L('Approval'), permission: 'case.approve', queue: 'approval', customerStatus: 'under_review', sla: sla(72), amountField: 'amount', separateFrom: ['review'], canReturn: true, outcomes: { approve: 'approved_end', decline: 'declined_end' } },
+    approved_end: { type: 'end', outcome: 'approved', customerMessage: L('A decision has been made on your application. Please sign in to continue.') },
+    declined_end: { type: 'end', outcome: 'declined', customerMessage: L('A decision has been made on your application. Please sign in to read it.') },
+  },
+});

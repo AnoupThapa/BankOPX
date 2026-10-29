@@ -18,7 +18,8 @@ import { CoreBankingPort, OtpDelivery } from '../src/customer-profile';
 import { migrate } from '../src/platform/migrate';
 import { AppLogger } from '../src/platform';
 import { EicarTestScanner, MalwareScanner } from '../src/document-evidence';
-import { PILOT_CERTIFICATE_WORKFLOW, REFERENCE_WORKFLOW } from '../src/workflow';
+import { CREDIT_REVIEW_WORKFLOW, PILOT_CERTIFICATE_WORKFLOW, REFERENCE_WORKFLOW } from '../src/workflow';
+import { DEMO_CALC_SET, DEMO_CHECKLIST, DEMO_PROPOSAL_TYPE, DEMO_SCORECARD } from '../src/credit';
 import { LocalFsObjectStore, ObjectStore } from '../src/platform';
 import { mkdtempSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
@@ -57,6 +58,8 @@ async function main() {
       { name: 'officerA', actor: 'staff', role: 'branch_officer', branch: 'A' }, { name: 'officerA2', actor: 'staff', role: 'branch_officer', branch: 'A' },
       { name: 'compliance', actor: 'staff', role: 'compliance_officer', branch: 'A' }, { name: 'lead', actor: 'staff', role: 'team_lead', branch: 'A' },
       { name: 'approverSmall', actor: 'staff', role: 'approver', branch: 'A', maxAmount: 50000 }, { name: 'approverBig', actor: 'staff', role: 'approver', branch: 'A', maxAmount: 10_000_000 },
+      { name: 'policyowner', actor: 'admin', role: 'credit_policy_owner', highRiskApproved: true },
+      { name: 'creditA', actor: 'staff', role: 'credit_officer', branch: 'A' }, { name: 'creditA2', actor: 'staff', role: 'credit_officer', branch: 'A' },
       { name: 'ops', actor: 'staff', role: 'operations_officer', branch: 'A' }, { name: 'sched', actor: 'integration', role: 'integration_service' },
     ], 'demo');
     // Synthetic staff logins for local walkthroughs and the browser test. Written to a file the developer controls; never used outside development.
@@ -96,6 +99,23 @@ async function main() {
       fulfilment: { connector: 'controlled-handoff', operation: 'issue_certificate' },
       title: loc('Certificate request (pilot)', 'प्रमाणपत्र अनुरोध (पाइलट)'), description: loc('Ask for a certificate. A person reviews and approves it; the bank then issues it.', 'प्रमाणपत्र अनुरोध गर्नुहोस्। व्यक्तिले समीक्षा र स्वीकृत गर्छन्; त्यसपछि बैंकले जारी गर्छ।'),
       whoCanApply: loc('Account holders.', 'खातावाला।'), fees: loc('No fee (demo)', 'शुल्क छैन (डेमो)'), supportChannel: loc('Call 1660-00-00000 (demo)', 'फोन 1660-00-00000 (डेमो)') });
+    // Credit review demo (Phase 6). EVERYTHING below is synthetic: invented names, formulas, weights and thresholds. It is not any bank's credit policy.
+    const po = await signIn(app, seed, 'policyowner');
+    await publish(maker, po, 'proposal_type', 'type_one', DEMO_PROPOSAL_TYPE('Demo proposal type')); await publish(maker, po, 'checklist', 'demo-checklist', DEMO_CHECKLIST());
+    await publish(maker, po, 'calculation_set', 'demo-calc', DEMO_CALC_SET()); await publish(maker, po, 'scorecard', 'demo-score', DEMO_SCORECARD());
+    await publish(maker, checker, 'form', 'business-loan-form', { fields: [
+      { key: 'amount', type: 'currency', label: L('Amount requested (NPR)', 'अनुरोध गरिएको रकम (रु.)'), required: true, privacy: 'sensitive', validation: { min: 1 } },
+      { key: 'tenor', type: 'number', label: L('Tenor in months', 'अवधि (महिना)'), privacy: 'internal' },
+      { key: 'purpose', type: 'text', label: L('Purpose', 'उद्देश्य'), privacy: 'sensitive' },
+      { key: 'id_photo', type: 'file', label: L('Photo of your ID', 'तपाईंको परिचयपत्रको फोटो'), required: true, privacy: 'restricted', documentKey: 'id_front', accept: ['image/jpeg', 'image/png'] },
+    ] });
+    await publish(maker, checker, 'workflow', 'credit-flow', CREDIT_REVIEW_WORKFLOW());
+    await publish(maker, checker, 'service', 'business-loan', { ...base, formKey: 'business-loan-form', workflowKey: 'credit-flow', requiresExistingRelationship: true, remoteClass: 'remote_first_conditional', documents: ['A photo of your ID'],
+      credit: { productClass: 'demo_term_loan', proposalTypeKeys: ['type_one'], checklistKey: 'demo-checklist', calculationSetKey: 'demo-calc', scorecardKey: 'demo-score', amountField: 'amount', tenorField: 'tenor', purposeField: 'purpose', currency: 'NPR' },
+      fulfilment: { connector: 'controlled-handoff', operation: 'book_facility' },
+      title: loc('Business loan (demo)', 'व्यापार ऋण (डेमो)'), description: loc('Apply for a business loan. A credit officer prepares the review and an approver decides.', 'व्यापार ऋणका लागि आवेदन दिनुहोस्। ऋण अधिकृतले समीक्षा तयार गर्छन् र स्वीकृतकर्ताले निर्णय गर्छन्।'),
+      whoCanApply: loc('Existing customers (demo).', 'वर्तमान ग्राहक (डेमो)।'), fees: loc('Fees shown at offer stage (demo)', 'प्रस्ताव चरणमा शुल्क देखाइन्छ (डेमो)'), supportChannel: loc('Visit any branch (demo)', 'कुनै पनि शाखामा जानुहोस् (डेमो)'),
+      visitReason: loc('The bank may ask to see original documents in a branch.', 'बैंकले शाखामा मूल कागजात हेर्न माग्न सक्छ।') });
     process.stdout.write('[dev] seeded demo institution\n');
   }
   const port = Number(process.env.PORT ?? 3100);

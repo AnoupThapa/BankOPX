@@ -41,6 +41,23 @@ export interface PilotMetrics {
   tat: Dashboard;
 }
 
+type Loc = { en: string; ne: string };
+export interface CreditStatus { enabled: boolean; exists: boolean; canPrepare: boolean; proposalTypes: Array<{ key: string; label: Loc }> }
+export type MeasureRes = { key: string; status: 'ok'; value: string } | { key: string; status: 'missing'; missing: string[] } | { key: string; status: 'stale'; stale: string[] } | { key: string; status: 'conflict'; conflicting: string[] } | { key: string; status: 'undefined'; reason: string };
+export interface CreditView {
+  proposalId: string; trackingCode: string; productClass: string; proposalType: Loc; pinned: { checklist: number; calculationSet: number; scorecard: number | null };
+  facility: { requestedAmount: string; currency: string; tenorMonths: number | null; purpose: string | null }; caseState: string;
+  parties: Array<{ partyId: string; role: string; name: string; note: string | null }>;
+  inputDefinitions: Array<{ key: string; label: Loc; unit: string }>; measureDefinitions: Array<{ key: string; label: Loc }>;
+  inputs: Array<{ key: string; value: string; asOf: string; source: string; conflict: boolean }>;
+  assessment: { calculation: { measures: MeasureRes[]; ranAt: string } | null;
+    score: { status: 'scored' | 'manual_review'; score: string | null; displayLabel: string; scorecard: { name: string; label: string; effectiveDate: string }; missing: string[]; reviewAction: { label: Loc; reviewAction: string } | null;
+      factors: Array<{ key: string; group: string; label: Loc; weight: string; value: string | null; points: string | null; state: string; reason?: string }> } | null; outdated: boolean; label: string };
+  checklist: { name: string; items: Array<{ key: string; label: Loc; required: boolean; answer: string | null; note: string | null }>; requiredUnanswered: string[]; notMet: string[] };
+  recommendation: { recommendation: string; rationale: string; exceptions: string | null; mitigants: string | null; concerns: string | null; scoreOverride: { reason: string; higherApprovalRequired: boolean } | null; at: string } | null;
+  conditions: Array<{ conditionId: string; kind: string; text: string; evidenceRequirement: string; dueDate: string | null; status: string; overdue: boolean }>; humanAndSystem: string;
+}
+
 export const api = {
   login: async (institution: string, username: string, password: string) => { const r = await call<{ csrfToken: string }>('POST', '/auth/login', { institution, username, password }); csrf = r.csrfToken; },
   mfa: (code: string) => call<void>('POST', '/auth/mfa/verify', { code }),
@@ -62,5 +79,9 @@ export const api = {
   retryHandoff: (id: string, note: string) => call<unknown>('POST', `/staff/integration/requests/${id}/retry`, { note }),
   pilot: (service?: string) => call<PilotMetrics>('GET', `/staff/pilot/metrics${service ? `?service=${encodeURIComponent(service)}` : ''}`),
   baseline: (body: object) => call<unknown>('POST', '/staff/pilot/baselines', body),
+  cases: () => call<Array<{ caseId: string; trackingCode: string; serviceKey: string; state: string; submittedAt: string }>>('GET', '/staff/cases'),
+  creditStatus: (caseId: string) => call<CreditStatus>('GET', `/staff/cases/${caseId}/credit/status`),
+  credit: (caseId: string) => call<CreditView>('GET', `/staff/cases/${caseId}/credit`),
+  creditPost: <T = unknown>(caseId: string, path: string, body: object = {}, key?: string) => call<T>('POST', `/staff/cases/${caseId}/credit${path}`, body, key ? { 'idempotency-key': key } : {}),
   newKey,
 };
