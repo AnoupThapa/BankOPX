@@ -1,0 +1,28 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_PASSWORD: postgres }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Create synthetic test database and roles (no real data, SEC-09)
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -c "create role bbjp_owner login password 'dev_owner_pw' createdb" \
+            -c "create role bbjp_app login password 'dev_app_pw'" -c "create database bbjp_test owner bbjp_owner"
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - name: Rule-to-test traceability gate
+        run: npm run traceability
+      - name: Dependency audit (fails on high/critical)
+        run: npm audit --audit-level=high

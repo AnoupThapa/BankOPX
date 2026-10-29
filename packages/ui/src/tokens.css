@@ -1,0 +1,37 @@
+/* Design tokens. Institution theming overrides these custom properties only (docs/12 §9). */
+:root {
+  --bbjp-font: system-ui, "Noto Sans", "Noto Sans Devanagari", sans-serif;
+  --bbjp-bg: #ffffff;
+  --bbjp-surface: #f5f6f8;
+  --bbjp-text: #14181f;            /* 16.9:1 on bg */
+  --bbjp-muted: #4a5260;           /* 7.6:1 on bg */
+  --bbjp-primary: #0b4f9c;         /* 8.3:1 on white */
+  --bbjp-on-primary: #ffffff;
+  --bbjp-border: #8a93a3;
+  --bbjp-focus: #b45309;
+  --bbjp-danger: #a31515;
+  --bbjp-warn: #7a4a00;
+  --bbjp-ok: #14683a;
+  --bbjp-radius: 8px;
+  --bbjp-space-1: 4px; --bbjp-space-2: 8px; --bbjp-space-3: 16px; --bbjp-space-4: 24px;
+  --bbjp-target: 44px;             /* minimum touch target (WCAG / docs/12 §4) */
+  font-family: var(--bbjp-font);
+  color: var(--bbjp-text);
+  background: var(--bbjp-bg);
+}
+body { margin: 0; font-size: 1rem; line-height: 1.5; }
+:focus-visible { outline: 3px solid var(--bbjp-focus); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+.bbjp-btn { min-height: var(--bbjp-target); min-width: var(--bbjp-target); padding: 0 var(--bbjp-space-3); border-radius: var(--bbjp-radius);
+  border: 2px solid var(--bbjp-primary); background: var(--bbjp-primary); color: var(--bbjp-on-primary); font: inherit; cursor: pointer; }
+.bbjp-btn[data-variant="secondary"] { background: transparent; color: var(--bbjp-primary); }
+.bbjp-btn:disabled { opacity: .6; cursor: not-allowed; }
+.bbjp-field { display: grid; gap: var(--bbjp-space-1); margin-block: var(--bbjp-space-3); }
+.bbjp-field input { min-height: var(--bbjp-target); padding: 0 var(--bbjp-space-2); border: 2px solid var(--bbjp-border); border-radius: var(--bbjp-radius); font: inherit; }
+.bbjp-field input[aria-invalid="true"] { border-color: var(--bbjp-danger); }
+.bbjp-hint { color: var(--bbjp-muted); font-size: .875rem; }
+.bbjp-error { color: var(--bbjp-danger); font-size: .875rem; }
+.bbjp-badge { display: inline-flex; gap: var(--bbjp-space-2); align-items: center; padding: var(--bbjp-space-1) var(--bbjp-space-2); border-radius: 999px; border: 2px solid currentColor; font-weight: 600; }
+.bbjp-badge[data-tone="ok"] { color: var(--bbjp-ok); } .bbjp-badge[data-tone="warn"] { color: var(--bbjp-warn); }
+.bbjp-badge[data-tone="danger"] { color: var(--bbjp-danger); } .bbjp-badge[data-tone="info"] { color: var(--bbjp-primary); }
+.bbjp-internal { border-left: 6px solid var(--bbjp-warn); background: var(--bbjp-surface); padding: var(--bbjp-space-3); }
