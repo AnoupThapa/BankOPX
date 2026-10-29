@@ -6,6 +6,8 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/bootstrap';
 import { hashPassword } from '../src/identity-access';
+import { CoreBankingPort, OtpDelivery } from '../src/customer-profile';
+import { Channel } from '../src/customer-profile/contact';
 import { AppLogger, encryptField } from '../src/platform';
 
 export const owner = new Pool({ connectionString: process.env.MIGRATION_DATABASE_URL });
@@ -27,8 +29,8 @@ export interface Seed { instId: string; code: string; branchA: string; branchB: 
 
 let counter = 0;
 /** Creates an institution with synthetic users only (SEC-09). */
-export async function seedInstitution(roles: Array<{ name: string; actor: string; role?: string; branch?: 'A' | 'B'; highRiskApproved?: boolean; maxAmount?: number }>): Promise<Seed> {
-  const code = `bank${Date.now()}${counter++}`;
+export async function seedInstitution(roles: Array<{ name: string; actor: string; role?: string; branch?: 'A' | 'B'; highRiskApproved?: boolean; maxAmount?: number }>, fixedCode?: string): Promise<Seed> {
+  const code = fixedCode ?? `bank${Date.now()}${counter++}`;
   const inst = (await owner.query('INSERT INTO institution(code, name) VALUES ($1,$1) RETURNING id', [code])).rows[0].id as string;
   const pw = await hashPassword(PASSWORD);
   return asTenant(inst, async (q) => {
@@ -52,8 +54,30 @@ export async function seedInstitution(roles: Array<{ name: string; actor: string
   });
 }
 
-export async function makeApp(sink: (l: string) => void = () => undefined): Promise<INestApplication> {
-  const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
+export class CapturingOtpDelivery extends OtpDelivery {
+  sent: Array<{ institutionId: string; channel: string; destination: string; code: string }> = [];
+  async send(institutionId: string, channel: Channel, destination: string, code: string) { this.sent.push({ institutionId, channel, destination, code }); }
+  last(destination: string) { return [...this.sent].reverse().find((m) => m.destination === destination)!; }
+}
+
+/** Fake authoritative core-banking record: account number -> record. Matches only when ALL verification attributes agree. */
+export class FakeCoreBanking extends CoreBankingPort {
+  records = new Map<string, { ref: string; branch?: string; verify: Record<string, string>; accounts: Array<{ maskedAccount: string; type: string }> }>();
+  calls = 0;
+  async matchCustomer(_i: string, accountNumber: string, v: Record<string, string>) {
+    this.calls++;
+    const r = this.records.get(accountNumber);
+    if (!r || Object.entries(r.verify).some(([k, x]) => v[k] !== x)) return null;
+    return { coreCustomerRef: r.ref, homeBranchCode: r.branch };
+  }
+  async listAuthorisedAccounts(_i: string, ref: string) { return [...this.records.values()].find((r) => r.ref === ref)?.accounts ?? []; }
+}
+
+export async function makeApp(sink: (l: string) => void = () => undefined, overrides: Array<[unknown, unknown]> = []): Promise<INestApplication> {
+  let builder = Test.createTestingModule({ imports: [AppModule] });
+  const m = builder;
+  for (const [token, value] of overrides) builder = m.overrideProvider(token as never).useValue(value);
+  const mod = await builder.compile();
   const app = mod.createNestApplication();
   configureApp(app, new AppLogger(sink)); // quiet by default
   await app.init();
@@ -69,4 +93,12 @@ export async function signIn(app: INestApplication, seed: Seed, username: string
   }
   const cookie = String(login.headers['set-cookie']).split(';')[0]!;
   return { agent, csrf: login.body.csrfToken, cookie };
+}
+
+/** Publishes configuration through the real maker-checker API. */
+export async function publish(maker: Session, checker: Session, kind: string, key: string, content: object, reason = 'test publish'): Promise<string> {
+  const d = await maker.agent.post('/config/drafts').set('x-csrf-token', maker.csrf).send({ kind, key, content, reason }).expect(201);
+  await maker.agent.post(`/config/versions/${d.body.id}/submit`).set('x-csrf-token', maker.csrf).send({ reason: 'ready' }).expect(201);
+  await checker.agent.post(`/config/versions/${d.body.id}/approve`).set('x-csrf-token', checker.csrf).send({ reason: 'ok' }).expect(201);
+  return d.body.id;
 }

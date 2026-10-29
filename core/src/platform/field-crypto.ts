@@ -22,3 +22,14 @@ export function decryptField(packed: string): string {
   d.setAuthTag(tag);
   return Buffer.concat([d.update(enc), d.final()]).toString('utf8');
 }
+
+// Keyed lookup hashes (HMAC-SHA256) for contact values and abuse counters. The key is separate from the encryption key.
+import { createHmac } from 'crypto';
+function hmacKey(): Buffer {
+  const hex = process.env.LOOKUP_HMAC_KEY;
+  if (!hex || hex.length !== 64) throw new Error('LOOKUP_HMAC_KEY (64 hex chars) is required');
+  return Buffer.from(hex, 'hex');
+}
+export function keyedHash(scope: string, value: string): string {
+  return createHmac('sha256', hmacKey()).update(`${scope}|${value}`).digest('hex');
+}

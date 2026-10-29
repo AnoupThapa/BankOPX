@@ -6,7 +6,7 @@ import { AuthService, SessionInfo } from './auth.service';
 import { PERMISSION_KEY, PUBLIC_KEY } from './decorators';
 import { Permission } from './permissions';
 import { ROLES } from './permissions';
-import { decide } from './policy';
+import { decide, holdsPermission } from './policy';
 
 export const COOKIE_NAME = 'bbjp_session';
 export type AuthedRequest = Request & { session$?: SessionInfo };
@@ -32,7 +32,8 @@ export class AuthGuard implements CanActivate {
     if (!permission && !pendingMfaOk && req.path !== '/auth/me') throw new UnauthorizedException(); // default deny: undeclared route
     if (permission) {
       const scoped = Object.values(ROLES).some((r) => r.scoped.includes(permission));
-      const d = scoped ? { allow: true, reason: '' } : decide(info.principal, permission, { institutionId: info.principal.institutionId });
+      // Scoped permissions: the caller must at least hold the permission somewhere; the controller then checks the specific object.
+      const d = scoped ? { allow: holdsPermission(info.principal, permission), reason: 'no_permission' } : decide(info.principal, permission, { institutionId: info.principal.institutionId });
       if (!d.allow) {
         // Denied attempts are themselves audit events (WFL-03 spirit, SEC-13 alerting input).
         await this.audit.recordStandalone({ institutionId: info.principal.institutionId, actorId: info.principal.userId, actorType: info.principal.actorType,

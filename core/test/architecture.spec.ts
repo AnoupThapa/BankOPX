@@ -25,7 +25,9 @@ describe('architecture rules (module boundaries)', () => {
   it('no module reaches into another module\'s tables except via its own service (only platform/audit/configuration own SQL for their tables)', () => {
     const owns: Record<string, string[]> = {
       audit: ['audit_event'], configuration: ['config_definition', 'config_version', 'config_change_event'],
-      'identity-access': ['user_account', 'role_assignment', 'delegation', 'app_session'], platform: ['idempotency_record', 'schema_migration'],
+      'identity-access': ['user_account', 'role_assignment', 'delegation', 'app_session'],
+      'customer-profile': ['customer_profile', 'customer_contact', 'customer_field_value', 'otp_challenge', 'otp_request_log', 'consent_record', 'customer_draft'],
+      'service-catalogue': [], platform: ['idempotency_record', 'schema_migration'],
     };
     const violations: string[] = [];
     for (const [mod, own] of Object.entries(owns)) {

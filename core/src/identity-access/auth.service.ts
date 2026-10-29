@@ -11,7 +11,7 @@ const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 const MAX_FAILED = 5;
 const MFA_ACTORS: ActorType[] = ['staff', 'admin', 'auditor'];
 
-export interface SessionInfo { sessionId: string; principal: Principal; csrfHash: string }
+export interface SessionInfo { sessionId: string; principal: Principal; csrfHash: string; stepUpAt: Date | null }
 
 @Injectable()
 export class AuthService {
@@ -48,6 +48,22 @@ export class AuthService {
     return result ?? fail();
   }
 
+  /** Creates a session for an identity that has already been authenticated by another mechanism (customer OTP). Caller audits. */
+  async createSession(tx: Tx, institutionId: string, userId: string, mfaVerified: boolean): Promise<{ cookie: string; csrfToken: string; sessionId: string }> {
+    const token = randomBytes(32).toString('hex');
+    const csrf = randomBytes(24).toString('hex');
+    const row = await tx.query(
+      `INSERT INTO app_session (institution_id, user_id, token_hash, csrf_hash, mfa_verified, stepup_at, expires_at)
+       VALUES ($1,$2,$3,$4,$5, now(), now() + ($6 || ' hours')::interval) RETURNING id`,
+      [institutionId, userId, sha(token), sha(csrf), mfaVerified, String(loadEnv().sessionAbsoluteHours)]);
+    return { cookie: `${institutionId}.${token}`, csrfToken: csrf, sessionId: row.rows[0].id };
+  }
+
+  /** IDN-06: records a fresh strong re-authentication on the session. */
+  async markStepUp(tx: Tx, sessionId: string): Promise<void> {
+    await tx.query('UPDATE app_session SET stepup_at = now() WHERE id=$1', [sessionId]);
+  }
+
   async verifyMfa(cookie: string, code: string): Promise<void> {
     const s = await this.authenticate(cookie, { allowPendingMfa: true });
     const valid = await this.db.withTenant(s.principal.institutionId, async (tx) => {
@@ -79,13 +95,13 @@ export class AuthService {
     return this.db.withTenant(institutionId, async (tx) => {
       const env = loadEnv();
       const s = (await tx.query(
-        `SELECT s.id, s.user_id, s.csrf_hash, s.mfa_verified, u.actor_type, u.status FROM app_session s JOIN user_account u ON u.id = s.user_id
+        `SELECT s.id, s.user_id, s.csrf_hash, s.mfa_verified, s.stepup_at, u.actor_type, u.status FROM app_session s JOIN user_account u ON u.id = s.user_id
          WHERE s.token_hash=$1 AND s.revoked_at IS NULL AND s.expires_at > now()
            AND s.last_seen_at > now() - ($2 || ' minutes')::interval`, [sha(token), String(env.sessionIdleMinutes)])).rows[0];
       if (!s || s.status !== 'active') throw new UnauthorizedException();
       if (!s.mfa_verified && !opts.allowPendingMfa) throw new ForbiddenException('mfa_required');
       await tx.query('UPDATE app_session SET last_seen_at = now() WHERE id=$1', [s.id]);
-      return { sessionId: s.id, csrfHash: s.csrf_hash, principal: await this.loadPrincipal(tx, institutionId, s.user_id, s.actor_type, s.mfa_verified) };
+      return { sessionId: s.id, csrfHash: s.csrf_hash, stepUpAt: s.stepup_at, principal: await this.loadPrincipal(tx, institutionId, s.user_id, s.actor_type, s.mfa_verified) };
     });
   }
 
